@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Altevatnet Tilting Lake</title>
+<meta name="description" content="3D visualisation of how Altevatnet in Troms, Norway, has tilted through the Holocene because of post-glacial rebound.">
+<link rel="stylesheet" href="css/app.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js",
+    "three/addons/": "./vendor/three/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="3D view of Altevatnet"></canvas>
+  <div id="labels"></div>
+
+  <header id="titlecard" class="panel">
+    <div class="tc-row">
+      <div>
+        <h1 data-i18n="title">Altevatnet — a tilting lake</h1>
+        <p class="sub" data-i18n="subtitle">Post-glacial rebound in Troms, 10 300 years in 3D</p>
+      </div>
+      <div class="lang" role="group" aria-label="Language">
+        <button data-lang="en" class="on">EN</button><button data-lang="no">NO</button>
+      </div>
+    </div>
+    <div class="tc-actions">
+      <button id="btn-tour" class="primary"><span class="ico">▶</span><span data-i18n="tour">Guided tour</span></button>
+      <button id="btn-about" data-i18n="about">About the model</button>
+      <button id="btn-shot" data-i18n="shot" title="PNG of the 3D view">Save image</button>
+    </div>
+  </header>
+
+  <aside id="side" class="panel">
+    <section class="now">
+      <div class="side-head"><h2 data-i18n="now_title">At this time</h2><button class="icon" id="btn-side" aria-label="Collapse panel" aria-expanded="true">–</button></div>
+      <div class="kpis">
+        <div class="kpi"><span class="k-label" data-i18n="k_tilt">Tilt along the lake</span><span class="k-val" id="k-tilt">–</span><span class="k-sub" id="k-tilt2"></span></div>
+        <div class="kpi"><span class="k-label" data-i18n="k_level">Water level at SE end</span><span class="k-val" id="k-level">–</span><span class="k-sub" data-i18n="k_level_sub">vs. today’s natural level</span></div>
+        <div class="kpi"><span class="k-label" data-i18n="k_area">Lake area</span><span class="k-val" id="k-area">–</span><span class="k-sub" id="k-area2"></span></div>
+        <div class="kpi"><span class="k-label" id="k-uplift-label">The outlet has since risen</span><span class="k-val" id="k-uplift">–</span><span class="k-sub" data-i18n="k_uplift_sub">relative to the geoid</span></div>
+      </div>
+      <div class="outlet" id="outlet"><span class="o-dot"></span><span id="outlet-text">–</span></div>
+      <p class="rate" id="k-rate"></p>
+    </section>
+
+    <section class="ctl">
+      <h2 data-i18n="view_title">View</h2>
+      <div class="seg" role="radiogroup" aria-label="Reference frame" id="seg-frame">
+        <button data-frame="0" class="on" data-i18n="frame_land">Land fixed · water tilts</button>
+        <button data-frame="1" data-i18n="frame_water">Water level · land tilts</button>
+      </div>
+      <label class="row"><span data-i18n="exag">Vertical exaggeration</span><output id="o-exag">3×</output></label>
+      <input type="range" id="r-exag" min="1" max="12" step="0.5" value="3">
+      <label class="row" for="s-base"><span data-i18n="basemap">Map</span></label>
+      <select id="s-base">
+        <option value="relief" data-i18n="bm_relief">Natural relief (reconstructed)</option>
+        <option value="topo" data-i18n="bm_topo">Kartverket topographic</option>
+        <option value="grey" data-i18n="bm_grey">Kartverket grey</option>
+        <option value="ortho" data-i18n="bm_ortho">Aerial photo (online)</option>
+      </select>
+      <label class="row" for="s-overlay"><span data-i18n="overlay">Overlay</span></label>
+      <select id="s-overlay">
+        <option value="0" data-i18n="ov_none">None</option>
+        <option value="1" data-i18n="ov_uplift">Uplift between this time and today (m, relative to the outlet)</option>
+        <option value="2" data-i18n="ov_rate">Present uplift rate (mm/yr)</option>
+      </select>
+      <div class="checks">
+        <label><input type="checkbox" id="c-iso" checked> <span data-i18n="c_iso">Palaeo-shorelines every 1000 yr</span></label>
+        <label><input type="checkbox" id="c-labels" checked> <span data-i18n="c_labels">Place names</span></label>
+        <label><input type="checkbox" id="c-reservoir"> <span data-i18n="c_reservoir">Today’s reservoir (HRV 489 m)</span></label>
+        <label><input type="checkbox" id="c-recon" checked> <span data-i18n="c_recon">Mark reconstructed lake floor</span></label>
+        <label><input type="checkbox" id="c-border" checked> <span data-i18n="c_border">National border</span></label>
+      </div>
+    </section>
+
+    <details class="ctl model" id="model-box">
+      <summary data-i18n="model_title">Model parameters</summary>
+      <label class="row"><span data-i18n="p_tau">Relaxation time τ</span><output id="o-tau">5000 yr</output></label>
+      <input type="range" id="r-tau" min="4000" max="6500" step="50" value="5000">
+      <label class="row"><span data-i18n="p_scale">Uplift scale k</span><output id="o-scale">1.00×</output></label>
+      <input type="range" id="r-scale" min="0.6" max="1.4" step="0.01" value="1">
+      <label class="row"><span data-i18n="p_deglac">Deglaciation</span><output id="o-deglac">10 300 BP</output></label>
+      <input type="range" id="r-deglac" min="10000" max="10600" step="50" value="10300">
+      <p class="fine" data-i18n="p_note"></p>
+      <button id="btn-reset" data-i18n="reset">Reset to calibrated values</button>
+    </details>
+    <p class="attrib" id="attrib"></p>
+  </aside>
+
+  <section id="profile" class="panel">
+    <div class="p-head">
+      <h2 data-i18n="profile_title">Long profile — dam → outlet → Altevatnet → Leinavatnet → SE col</h2>
+      <button class="icon" id="btn-profile" aria-label="Collapse profile">–</button>
+    </div>
+    <canvas id="profile-canvas"></canvas>
+  </section>
+
+  <div id="caption" class="panel hidden" role="status" aria-live="polite">
+    <div class="cap-head"><span id="cap-step"></span><h3 id="cap-title"></h3><div class="lang small" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="no">NO</button></div></div>
+    <p id="cap-text"></p>
+    <div class="cap-nav">
+      <button id="cap-prev" data-i18n="prev">‹ Back</button>
+      <button id="cap-next" class="primary" data-i18n="next">Next ›</button>
+      <button id="cap-close" data-i18n="close">Close</button>
+    </div>
+  </div>
+
+  <footer id="timeline" class="panel">
+    <div class="tl-left">
+      <button id="btn-play" class="play" aria-label="Play"><span>▶</span></button>
+      <select id="s-speed" aria-label="Speed">
+        <option value="250">250 yr/s</option>
+        <option value="500" selected>500 yr/s</option>
+        <option value="1000">1000 yr/s</option>
+        <option value="2000">2000 yr/s</option>
+      </select>
+    </div>
+    <div class="tl-year">
+      <div class="y-main" id="y-main">–</div>
+      <div class="y-sub" id="y-sub">–</div>
+    </div>
+    <div class="tl-track">
+      <div class="tl-events" id="tl-events"></div>
+      <div class="tl-bands" id="tl-bands"></div>
+      <input type="range" id="r-time" min="0" max="1" step="0.0001" value="1" aria-label="Time">
+      <div class="tl-axis" id="tl-axis"></div>
+    </div>
+  </footer>
+
+  <div id="about" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="about-h">
+    <div class="modal-body panel">
+      <button class="icon close" id="about-close" aria-label="Close">×</button>
+      <div id="about-content"></div>
+    </div>
+  </div>
+
+  <div id="loading">
+    <div class="ld-box">
+      <div class="ld-title">Altevatnet</div>
+      <div class="ld-bar"><div id="ld-fill"></div></div>
+      <div class="ld-msg" id="ld-msg">Loading…</div>
+    </div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

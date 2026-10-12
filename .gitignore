@@ -1,0 +1,22 @@
+# local environment
+.venv/
+__pycache__/
+*.pyc
+.claude/
+
+# source data (large, downloadable with tools/fetch_*.py; some not redistributable)
+data/raw/
+data/processed/*
+!data/processed/uplift_rate_grid.json
+!data/processed/uplift_time_model.json
+NVEKartdata/
+
+# scratch work
+scratch/
+
+# poster exports
+exports/
+*.zip
+
+# research quicklooks
+data/derived/

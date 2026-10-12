@@ -1,0 +1,707 @@
+{
+ "form": "exponential relaxation (separable): U(x,y,t) = r(x,y) * F(t), F(t) = tau*(exp(t/tau)-1), t in years BP (t<0 future)",
+ "tau_years": 5000,
+ "tau_fit": 5026,
+ "tau_1sigma": [
+  4770,
+  5339
+ ],
+ "rate_model": "NKG2016LU_lev (data/processed/uplift_rate_grid.json 'values')",
+ "deglaciation_cal_bp": {
+  "best": 10300,
+  "min": 9900,
+  "max": 10700
+ },
+ "lake": {
+  "NW_outlet_xy": [
+   657701.19,
+   7621216.7
+  ],
+  "SE_end_xy": [
+   696701.64,
+   7608715.57
+  ],
+  "length_km": 40.955,
+  "r_nw_mm_yr": 4.2958,
+  "r_se_mm_yr": 4.8653,
+  "dr_mm_yr": 0.5694,
+  "grad_max_mm_yr_per_km": 0.018371
+ },
+ "passe_variant": {
+  "formula": "U=(2/pi)A[atan(T/Bv)-atan((T-t)/Bv)+atan(T/Be)-atan((T-t)/Be)], Bv=19A+5000 (Passe & Daniels 2015)",
+  "A_m": 130.6,
+  "T": 10500.0,
+  "Be": 1200.0,
+  "Bv": 7481,
+  "note": "F_passe = U(t)/U'(0); same r scaling"
+ },
+ "eustasy": "Passe & Daniels (2015) formulas 4-5",
+ "constraints": [
+  {
+   "id": "C1 Tornetrask ice-dammed lake shorelines",
+   "t": 10000,
+   "F": 33688.938798427844,
+   "sF": 5614.823133071309,
+   "kind": "gradient ratio (eustasy-free)",
+   "use": true,
+   "F_exp": 31945.280494653252,
+   "F_passe": 34925.703390336465
+  },
+  {
+   "id": "C2 Malselv marine limit 80 m",
+   "t": 10400,
+   "F": 34312.311610039345,
+   "sF": 2934.5775158798415,
+   "kind": "absolute (ML - eustasy)",
+   "use": true,
+   "note": "r=3.71 mm/yr, E=-47.3 m, U=127 m",
+   "F_exp": 35022.344571481764,
+   "F_passe": 41472.787620058094
+  },
+  {
+   "id": "C3 Ovre Salangen marine limit 83 m (age assumed)",
+   "t": 10600,
+   "F": 35858.600084299105,
+   "sF": 5378.790012644866,
+   "kind": "absolute",
+   "use": false,
+   "note": "r=3.70, U=133 m",
+   "F_exp": 36655.687438438465,
+   "F_passe": 44934.75388128517
+  },
+  {
+   "id": "C4 Troms Main shoreline (YD) 0.9-1.1 m/km",
+   "t": 12000,
+   "F": 52631.57894736842,
+   "sF": 7894.736842105262,
+   "kind": "gradient ratio, coastal, pre-dates Altevatn deglaciation",
+   "use": false,
+   "F_exp": 50115.88190320801,
+   "F_passe": 62824.87938175822
+  },
+  {
+   "id": "C5 Lofoten-Vesteralen gradient 0.25 m/km",
+   "t": 7000,
+   "F": 11013.215859030837,
+   "sF": 3303.964757709251,
+   "kind": "gradient ratio, outer coast",
+   "use": false,
+   "F_exp": 15275.999834223372,
+   "F_passe": 13105.143992011037
+  },
+  {
+   "id": "C5 Lofoten-Vesteralen gradient 0.14 m/km",
+   "t": 5000,
+   "F": 6167.4008810572695,
+   "sF": 1850.2202643171809,
+   "kind": "gradient ratio, outer coast",
+   "use": false,
+   "F_exp": 8591.409142295226,
+   "F_passe": 7511.941305736616
+  },
+  {
+   "id": "C5 Lofoten-Vesteralen gradient 0.07 m/km",
+   "t": 3000,
+   "F": 3083.7004405286348,
+   "sF": 925.1101321585904,
+   "kind": "gradient ratio, outer coast",
+   "use": false,
+   "F_exp": 4110.594001952544,
+   "F_passe": 3765.637150036133
+  }
+ ],
+ "tilt_table": [
+  {
+   "t_bp": 10500,
+   "F_years": 35830.8,
+   "diff_uplift_SE_minus_NW_m": 20.404,
+   "tilt_m_per_km": 0.4982,
+   "max_tilt_m_per_km": 0.65825,
+   "uplift_NW_m": 153.92,
+   "uplift_SE_m": 174.33,
+   "F_lo": 38333.5,
+   "F_hi": 32817.6,
+   "F_passe": 43203.8,
+   "F_two_component": 36452.2
+  },
+  {
+   "t_bp": 10000,
+   "F_years": 31945.3,
+   "diff_uplift_SE_minus_NW_m": 18.191,
+   "tilt_m_per_km": 0.44418,
+   "max_tilt_m_per_km": 0.58687,
+   "uplift_NW_m": 137.23,
+   "uplift_SE_m": 155.42,
+   "F_lo": 34044.1,
+   "F_hi": 29406.4,
+   "F_passe": 34925.7,
+   "F_two_component": 30050.3
+  },
+  {
+   "t_bp": 9000,
+   "F_years": 25248.2,
+   "diff_uplift_SE_minus_NW_m": 14.378,
+   "tilt_m_per_km": 0.35106,
+   "max_tilt_m_per_km": 0.46384,
+   "uplift_NW_m": 108.46,
+   "uplift_SE_m": 122.84,
+   "F_lo": 26703.3,
+   "F_hi": 23471.7,
+   "F_passe": 23582.7,
+   "F_two_component": 20954.8
+  },
+  {
+   "t_bp": 8000,
+   "F_years": 19765.2,
+   "diff_uplift_SE_minus_NW_m": 11.255,
+   "tilt_m_per_km": 0.27482,
+   "max_tilt_m_per_km": 0.36311,
+   "uplift_NW_m": 84.91,
+   "uplift_SE_m": 96.16,
+   "F_lo": 20750.8,
+   "F_hi": 18550.7,
+   "F_passe": 17271.9,
+   "F_two_component": 15100.7
+  },
+  {
+   "t_bp": 7000,
+   "F_years": 15276.0,
+   "diff_uplift_SE_minus_NW_m": 8.699,
+   "tilt_m_per_km": 0.2124,
+   "max_tilt_m_per_km": 0.28064,
+   "uplift_NW_m": 65.62,
+   "uplift_SE_m": 74.32,
+   "F_lo": 15924.2,
+   "F_hi": 14470.2,
+   "F_passe": 13105.1,
+   "F_two_component": 11180.8
+  },
+  {
+   "t_bp": 6000,
+   "F_years": 11600.6,
+   "diff_uplift_SE_minus_NW_m": 6.606,
+   "tilt_m_per_km": 0.1613,
+   "max_tilt_m_per_km": 0.21311,
+   "uplift_NW_m": 49.83,
+   "uplift_SE_m": 56.44,
+   "F_lo": 12010.3,
+   "F_hi": 11086.7,
+   "F_passe": 9990.8,
+   "F_two_component": 8419.6
+  },
+  {
+   "t_bp": 4000,
+   "F_years": 6127.7,
+   "diff_uplift_SE_minus_NW_m": 3.489,
+   "tilt_m_per_km": 0.0852,
+   "max_tilt_m_per_km": 0.11257,
+   "uplift_NW_m": 26.32,
+   "uplift_SE_m": 29.81,
+   "F_lo": 6263.3,
+   "F_hi": 5954.7,
+   "F_passe": 5473.6,
+   "F_two_component": 4718.3
+  },
+  {
+   "t_bp": 2000,
+   "F_years": 2459.1,
+   "diff_uplift_SE_minus_NW_m": 1.4,
+   "tilt_m_per_km": 0.03419,
+   "max_tilt_m_per_km": 0.04518,
+   "uplift_NW_m": 10.56,
+   "uplift_SE_m": 11.96,
+   "F_lo": 2484.6,
+   "F_hi": 2426.1,
+   "F_passe": 2316.1,
+   "F_two_component": 2131.7
+  },
+  {
+   "t_bp": 1000,
+   "F_years": 1107.0,
+   "diff_uplift_SE_minus_NW_m": 0.63,
+   "tilt_m_per_km": 0.01539,
+   "max_tilt_m_per_km": 0.02034,
+   "uplift_NW_m": 4.76,
+   "uplift_SE_m": 5.39,
+   "F_lo": 1112.5,
+   "F_hi": 1099.8,
+   "F_passe": 1073.8,
+   "F_two_component": 1029.1
+  },
+  {
+   "t_bp": 0,
+   "F_years": 0.0,
+   "diff_uplift_SE_minus_NW_m": 0.0,
+   "tilt_m_per_km": 0.0,
+   "max_tilt_m_per_km": 0.0,
+   "uplift_NW_m": 0.0,
+   "uplift_SE_m": 0.0,
+   "F_lo": 0.0,
+   "F_hi": 0.0,
+   "F_passe": 0.0,
+   "F_two_component": 0.0
+  },
+  {
+   "t_bp": -500,
+   "F_years": -475.8,
+   "diff_uplift_SE_minus_NW_m": -0.271,
+   "tilt_m_per_km": -0.00662,
+   "max_tilt_m_per_km": -0.00874,
+   "uplift_NW_m": -2.04,
+   "uplift_SE_m": -2.31,
+   "F_lo": -474.7,
+   "F_hi": -477.3,
+   "F_passe": -483.3,
+   "F_two_component": -493.8
+  },
+  {
+   "t_bp": -1000,
+   "F_years": -906.3,
+   "diff_uplift_SE_minus_NW_m": -0.516,
+   "tilt_m_per_km": -0.0126,
+   "max_tilt_m_per_km": -0.01665,
+   "uplift_NW_m": -3.89,
+   "uplift_SE_m": -4.41,
+   "F_lo": -902.1,
+   "F_hi": -911.9,
+   "F_passe": -935.0,
+   "F_two_component": -976.2
+  },
+  {
+   "t_bp": -2000,
+   "F_years": -1648.4,
+   "diff_uplift_SE_minus_NW_m": -0.939,
+   "tilt_m_per_km": -0.02292,
+   "max_tilt_m_per_km": -0.03028,
+   "uplift_NW_m": -7.08,
+   "uplift_SE_m": -8.02,
+   "F_lo": -1633.7,
+   "F_hi": -1668.1,
+   "F_passe": -1754.8,
+   "F_two_component": -1912.0
+  },
+  {
+   "t_bp": -3000,
+   "F_years": -2255.9,
+   "diff_uplift_SE_minus_NW_m": -1.285,
+   "tilt_m_per_km": -0.03137,
+   "max_tilt_m_per_km": -0.04144,
+   "uplift_NW_m": -9.69,
+   "uplift_SE_m": -10.98,
+   "F_lo": -2226.8,
+   "F_hi": -2295.1,
+   "F_passe": -2478.2,
+   "F_two_component": -2815.0
+  }
+ ],
+ "F_table": [
+  {
+   "t_bp": 10500,
+   "F_years": 35830.8,
+   "F_lo": 38333.5,
+   "F_hi": 32817.6,
+   "F_passe": 43203.8,
+   "F_two_component": 36452.2
+  },
+  {
+   "t_bp": 10250,
+   "F_years": 33839.5,
+   "F_lo": 36132.6,
+   "F_hi": 31072.1,
+   "F_passe": 38920.6,
+   "F_two_component": 33061.6
+  },
+  {
+   "t_bp": 10000,
+   "F_years": 31945.3,
+   "F_lo": 34044.1,
+   "F_hi": 29406.4,
+   "F_passe": 34925.7,
+   "F_two_component": 30050.3
+  },
+  {
+   "t_bp": 9750,
+   "F_years": 30143.4,
+   "F_lo": 32062.2,
+   "F_hi": 27817.0,
+   "F_passe": 31392.4,
+   "F_two_component": 27372.0
+  },
+  {
+   "t_bp": 9500,
+   "F_years": 28429.5,
+   "F_lo": 30181.5,
+   "F_hi": 26300.2,
+   "F_passe": 28359.4,
+   "F_two_component": 24986.4
+  },
+  {
+   "t_bp": 9250,
+   "F_years": 26799.1,
+   "F_lo": 28396.8,
+   "F_hi": 24852.9,
+   "F_passe": 25781.2,
+   "F_two_component": 22857.7
+  },
+  {
+   "t_bp": 9000,
+   "F_years": 25248.2,
+   "F_lo": 26703.3,
+   "F_hi": 23471.7,
+   "F_passe": 23582.7,
+   "F_two_component": 20954.8
+  },
+  {
+   "t_bp": 8750,
+   "F_years": 23773.0,
+   "F_lo": 25096.2,
+   "F_hi": 22153.7,
+   "F_passe": 21689.0,
+   "F_two_component": 19250.3
+  },
+  {
+   "t_bp": 8500,
+   "F_years": 22369.7,
+   "F_lo": 23571.2,
+   "F_hi": 20896.1,
+   "F_passe": 20037.2,
+   "F_two_component": 17720.1
+  },
+  {
+   "t_bp": 8250,
+   "F_years": 21034.9,
+   "F_lo": 22124.1,
+   "F_hi": 19695.9,
+   "F_passe": 18577.5,
+   "F_two_component": 16343.0
+  },
+  {
+   "t_bp": 8000,
+   "F_years": 19765.2,
+   "F_lo": 20750.8,
+   "F_hi": 18550.7,
+   "F_passe": 17271.9,
+   "F_two_component": 15100.7
+  },
+  {
+   "t_bp": 7750,
+   "F_years": 18557.4,
+   "F_lo": 19447.7,
+   "F_hi": 17457.8,
+   "F_passe": 16091.4,
+   "F_two_component": 13976.7
+  },
+  {
+   "t_bp": 7500,
+   "F_years": 17408.4,
+   "F_lo": 18211.1,
+   "F_hi": 16415.0,
+   "F_passe": 15014.0,
+   "F_two_component": 12956.8
+  },
+  {
+   "t_bp": 7250,
+   "F_years": 16315.6,
+   "F_lo": 17037.7,
+   "F_hi": 15419.8,
+   "F_passe": 14023.0,
+   "F_two_component": 12028.5
+  },
+  {
+   "t_bp": 7000,
+   "F_years": 15276.0,
+   "F_lo": 15924.2,
+   "F_hi": 14470.2,
+   "F_passe": 13105.1,
+   "F_two_component": 11180.8
+  },
+  {
+   "t_bp": 6750,
+   "F_years": 14287.1,
+   "F_lo": 14867.5,
+   "F_hi": 13564.0,
+   "F_passe": 12250.4,
+   "F_two_component": 10404.0
+  },
+  {
+   "t_bp": 6500,
+   "F_years": 13346.5,
+   "F_lo": 13864.8,
+   "F_hi": 12699.3,
+   "F_passe": 11450.5,
+   "F_two_component": 9689.7
+  },
+  {
+   "t_bp": 6250,
+   "F_years": 12451.7,
+   "F_lo": 12913.3,
+   "F_hi": 11874.1,
+   "F_passe": 10699.1,
+   "F_two_component": 9030.4
+  },
+  {
+   "t_bp": 6000,
+   "F_years": 11600.6,
+   "F_lo": 12010.3,
+   "F_hi": 11086.7,
+   "F_passe": 9990.8,
+   "F_two_component": 8419.6
+  },
+  {
+   "t_bp": 5750,
+   "F_years": 10791.0,
+   "F_lo": 11153.5,
+   "F_hi": 10335.2,
+   "F_passe": 9321.4,
+   "F_two_component": 7851.6
+  },
+  {
+   "t_bp": 5500,
+   "F_years": 10020.8,
+   "F_lo": 10340.4,
+   "F_hi": 9618.2,
+   "F_passe": 8687.0,
+   "F_two_component": 7321.2
+  },
+  {
+   "t_bp": 5250,
+   "F_years": 9288.3,
+   "F_lo": 9568.9,
+   "F_hi": 8934.0,
+   "F_passe": 8084.8,
+   "F_two_component": 6824.2
+  },
+  {
+   "t_bp": 5000,
+   "F_years": 8591.4,
+   "F_lo": 8836.7,
+   "F_hi": 8281.1,
+   "F_passe": 7511.9,
+   "F_two_component": 6356.6
+  },
+  {
+   "t_bp": 4750,
+   "F_years": 7928.5,
+   "F_lo": 8142.0,
+   "F_hi": 7658.0,
+   "F_passe": 6966.3,
+   "F_two_component": 5915.0
+  },
+  {
+   "t_bp": 4500,
+   "F_years": 7298.0,
+   "F_lo": 7482.7,
+   "F_hi": 7063.4,
+   "F_passe": 6445.8,
+   "F_two_component": 5496.5
+  },
+  {
+   "t_bp": 4250,
+   "F_years": 6698.2,
+   "F_lo": 6857.0,
+   "F_hi": 6496.1,
+   "F_passe": 5948.8,
+   "F_two_component": 5098.3
+  },
+  {
+   "t_bp": 4000,
+   "F_years": 6127.7,
+   "F_lo": 6263.3,
+   "F_hi": 5954.7,
+   "F_passe": 5473.6,
+   "F_two_component": 4718.3
+  },
+  {
+   "t_bp": 3750,
+   "F_years": 5585.0,
+   "F_lo": 5700.0,
+   "F_hi": 5438.0,
+   "F_passe": 5018.9,
+   "F_two_component": 4354.3
+  },
+  {
+   "t_bp": 3500,
+   "F_years": 5068.8,
+   "F_lo": 5165.3,
+   "F_hi": 4945.0,
+   "F_passe": 4583.4,
+   "F_two_component": 4004.7
+  },
+  {
+   "t_bp": 3250,
+   "F_years": 4577.7,
+   "F_lo": 4658.0,
+   "F_hi": 4474.6,
+   "F_passe": 4166.0,
+   "F_two_component": 3667.8
+  },
+  {
+   "t_bp": 3000,
+   "F_years": 4110.6,
+   "F_lo": 4176.6,
+   "F_hi": 4025.6,
+   "F_passe": 3765.6,
+   "F_two_component": 3342.2
+  },
+  {
+   "t_bp": 2750,
+   "F_years": 3666.3,
+   "F_lo": 3719.8,
+   "F_hi": 3597.3,
+   "F_passe": 3381.3,
+   "F_two_component": 3026.8
+  },
+  {
+   "t_bp": 2500,
+   "F_years": 3243.6,
+   "F_lo": 3286.3,
+   "F_hi": 3188.5,
+   "F_passe": 3012.1,
+   "F_two_component": 2720.5
+  },
+  {
+   "t_bp": 2250,
+   "F_years": 2841.6,
+   "F_lo": 2874.9,
+   "F_hi": 2798.4,
+   "F_passe": 2657.3,
+   "F_two_component": 2422.4
+  },
+  {
+   "t_bp": 2000,
+   "F_years": 2459.1,
+   "F_lo": 2484.6,
+   "F_hi": 2426.1,
+   "F_passe": 2316.1,
+   "F_two_component": 2131.7
+  },
+  {
+   "t_bp": 1750,
+   "F_years": 2095.3,
+   "F_lo": 2114.2,
+   "F_hi": 2070.9,
+   "F_passe": 1987.8,
+   "F_two_component": 1847.5
+  },
+  {
+   "t_bp": 1500,
+   "F_years": 1749.3,
+   "F_lo": 1762.6,
+   "F_hi": 1731.9,
+   "F_passe": 1671.7,
+   "F_two_component": 1569.4
+  },
+  {
+   "t_bp": 1250,
+   "F_years": 1420.1,
+   "F_lo": 1429.1,
+   "F_hi": 1408.4,
+   "F_passe": 1367.2,
+   "F_two_component": 1296.8
+  },
+  {
+   "t_bp": 1000,
+   "F_years": 1107.0,
+   "F_lo": 1112.5,
+   "F_hi": 1099.8,
+   "F_passe": 1073.8,
+   "F_two_component": 1029.1
+  },
+  {
+   "t_bp": 750,
+   "F_years": 809.2,
+   "F_lo": 812.2,
+   "F_hi": 805.2,
+   "F_passe": 790.8,
+   "F_two_component": 765.9
+  },
+  {
+   "t_bp": 500,
+   "F_years": 525.9,
+   "F_lo": 527.1,
+   "F_hi": 524.2,
+   "F_passe": 517.8,
+   "F_two_component": 506.9
+  },
+  {
+   "t_bp": 250,
+   "F_years": 256.4,
+   "F_lo": 256.7,
+   "F_hi": 255.9,
+   "F_passe": 254.4,
+   "F_two_component": 251.7
+  },
+  {
+   "t_bp": 0,
+   "F_years": 0.0,
+   "F_lo": 0.0,
+   "F_hi": 0.0,
+   "F_passe": 0.0,
+   "F_two_component": 0.0
+  },
+  {
+   "t_bp": -250,
+   "F_years": -243.9,
+   "F_lo": -243.6,
+   "F_hi": -244.2,
+   "F_passe": -245.7,
+   "F_two_component": -248.4
+  },
+  {
+   "t_bp": -500,
+   "F_years": -475.8,
+   "F_lo": -474.7,
+   "F_hi": -477.3,
+   "F_passe": -483.3,
+   "F_two_component": -493.8
+  },
+  {
+   "t_bp": -750,
+   "F_years": -696.5,
+   "F_lo": -694.0,
+   "F_hi": -699.7,
+   "F_passe": -712.9,
+   "F_two_component": -736.3
+  },
+  {
+   "t_bp": -1000,
+   "F_years": -906.3,
+   "F_lo": -902.1,
+   "F_hi": -911.9,
+   "F_passe": -935.0,
+   "F_two_component": -976.2
+  },
+  {
+   "t_bp": -1500,
+   "F_years": -1295.9,
+   "F_lo": -1287.0,
+   "F_hi": -1307.7,
+   "F_passe": -1358.1,
+   "F_two_component": -1448.6
+  },
+  {
+   "t_bp": -2000,
+   "F_years": -1648.4,
+   "F_lo": -1633.7,
+   "F_hi": -1668.1,
+   "F_passe": -1754.8,
+   "F_two_component": -1912.0
+  },
+  {
+   "t_bp": -3000,
+   "F_years": -2255.9,
+   "F_lo": -2226.8,
+   "F_hi": -2295.1,
+   "F_passe": -2478.2,
+   "F_two_component": -2815.0
+  }
+ ],
+ "two_component_sensitivity": {
+  "formula": "F=a*tau1*(exp(t/tau1)-1)+(1-a)*tau2*(exp(t/tau2)-1)",
+  "a": 0.0548,
+  "tau1": 1915,
+  "tau2": 40000,
+  "chi2": 0.57,
+  "fitted_to": "C1,C2,C5"
+ }
+}

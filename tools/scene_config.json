@@ -1,0 +1,358 @@
+{
+  "lake": "altevatn",
+  "name": "Altevatnet",
+  "vatnlnr": 2396,
+  "dtm": "data/raw/dtm_ext/dtm10_ext",
+  "uplift_grid": "data/processed/uplift_rate_grid.json",
+  "cell_dem": 20,
+  "cell_mesh": 40,
+  "render_bbox": [
+    648000,
+    7584000,
+    716000,
+    7632000
+  ],
+  "survey_level_m": 477.0,
+  "survey_datum_to_nn2000_m": 0.15,
+  "natural_level_m": 475.95,
+  "regulated_hrv_m": 489.15,
+  "regulated_lrv_m": 472.95,
+  "reservoir_water_max_m": 488.65,
+  "outlet": {
+    "name": "Natural outlet (os) of Altevatn into Barduelva",
+    "x": 660700,
+    "y": 7621600,
+    "sill_m": 475.95,
+    "note": "Lake-to-river transition from the 1932 gradteig map and the 1959 0/2 m contours (+-400 m). The sill height is unmeasured; the natural summer level 475.8 (local) = 475.95 NN2000 is used."
+  },
+  "outlet_channel": [
+    [
+      661600,
+      7621420
+    ],
+    [
+      661100,
+      7621560
+    ],
+    [
+      660700,
+      7621600
+    ],
+    [
+      660240,
+      7621665
+    ],
+    [
+      659377,
+      7621476
+    ],
+    [
+      658500,
+      7621250
+    ],
+    [
+      657769,
+      7620978
+    ],
+    [
+      657300,
+      7620850
+    ],
+    [
+      656767,
+      7620710
+    ]
+  ],
+  "outlet_channel_width_m": 60,
+  "F_grid": {
+    "min": -4000,
+    "max": 90000,
+    "step": 250
+  },
+  "outlet_channel_z": [
+    474.4,
+    475.2,
+    475.95,
+    475.6,
+    475.0,
+    473.5,
+    470.0,
+    null,
+    null
+  ],
+  "lakes": [
+    {
+      "name": "Altevatnet",
+      "region": "data/raw/altevatn_omkrets_dybdemalt.geojson",
+      "clip_bbox": [
+        667700,
+        7590000,
+        720000,
+        7640000
+      ]
+    },
+    {
+      "name": "Altevatnet W basin",
+      "region": "data/raw/altevatn_omkrets_dybdemalt.geojson",
+      "clip_bbox": [
+        640000,
+        7590000,
+        667500,
+        7640000
+      ]
+    },
+    {
+      "name": "Leinavatnet (Davit + Lulit Lenesjávri; NVE lake 2402)",
+      "region": "data/raw/leinavatn_innsjo.geojson"
+    }
+  ],
+  "lakes_without_bathymetry": [
+    {
+      "name": "Leinavatnet (Davit + Lulit Lenesjávri; NVE lake 2402)",
+      "file": "data/raw/leinavatn_innsjo.geojson",
+      "nominal_depth_m": 1.0
+    }
+  ],
+  "rate_fit_centre": [
+    680000.0,
+    7612000.0
+  ],
+  "natural_level_note": "Devik (1959) and the 1969 manoeuvring rules: natural summer level 475.8 in NVE's local levelling datum (L.nr. 418); +0.15 m to NN2000 per NVE (+/-0.2 m) = 475.95 NN2000",
+  "survey_level_note": "1959 echo sounding at 477.0 = top of a temporary 1.2 m dam (1957); natural shoreline ~ 1.2 m depth line",
+  "dam": {
+    "name": "Altevassdammen (NVE 1015)",
+    "x": 657769,
+    "y": 7620978,
+    "crest_m": 495,
+    "year": 1960
+  },
+  "se_col": {
+    "name": "SE watershed col (to Torneträsk)",
+    "x": 704640,
+    "y": 7592240
+  },
+  "outlets": [
+    {
+      "id": "luspi",
+      "name": "Luspi → Barduelva → Målselva (Atlantic)",
+      "x": 660700,
+      "y": 7621600,
+      "radius_m": 1500,
+      "sea": "Atlantic"
+    },
+    {
+      "id": "secol",
+      "name": "SE col → Torneträsk → Torne älv (Baltic)",
+      "x": 704640,
+      "y": 7592240,
+      "radius_m": 2000,
+      "sea": "Baltic"
+    },
+    {
+      "id": "leina",
+      "name": "Leinavatn outlet sill (Gjeddebukta)",
+      "x": 692460,
+      "y": 7604340,
+      "radius_m": 1500
+    },
+    {
+      "id": "straumen",
+      "name": "Straumen strait",
+      "x": 667620,
+      "y": 7618780,
+      "radius_m": 1200
+    }
+  ],
+  "places": [
+    {
+      "name": "Altevatnet",
+      "sami": "Álddesjávri",
+      "lat": 68.585,
+      "lon": 19.32,
+      "kind": "lake",
+      "rank": 1
+    },
+    {
+      "name": "Natural outlet",
+      "name_no": "Naturlig utløp",
+      "note": "lake → Barduelva, ≈ 476 m",
+      "note_no": "vatnet → Barduelva, ≈ 476 moh.",
+      "x": 660700,
+      "y": 7621600,
+      "kind": "outlet",
+      "rank": 1
+    },
+    {
+      "name": "Luspi",
+      "note": "the old lake outlet (os), now under the reservoir",
+      "note_no": "den gamle utløpsosen, nå under magasinet",
+      "lat": 68.65942,
+      "lon": 18.92661,
+      "kind": "place",
+      "rank": 3
+    },
+    {
+      "name": "Altevassdammen",
+      "note": "dam 1960, crest 495 m",
+      "note_no": "dam 1960, damtopp 495 moh.",
+      "lat": 68.65588,
+      "lon": 18.88633,
+      "kind": "dam",
+      "rank": 2
+    },
+    {
+      "name": "Altevasshytta",
+      "lat": 68.66332,
+      "lon": 18.89064,
+      "kind": "hut",
+      "rank": 3
+    },
+    {
+      "name": "Innset",
+      "lat": 68.65882,
+      "lon": 18.81244,
+      "kind": "village",
+      "rank": 3
+    },
+    {
+      "name": "Straumen",
+      "sami": "Čoalbmi",
+      "note": "strait between the basins",
+      "note_no": "sund mellom bassengene",
+      "lat": 68.62818,
+      "lon": 19.12547,
+      "kind": "strait",
+      "rank": 2
+    },
+    {
+      "name": "Gaskashytta",
+      "lat": 68.65879,
+      "lon": 19.12034,
+      "kind": "hut",
+      "rank": 3
+    },
+    {
+      "name": "Storholmen",
+      "lat": 68.64941,
+      "lon": 19.0368,
+      "kind": "island",
+      "rank": 3
+    },
+    {
+      "name": "Storbukthytta",
+      "lat": 68.58962,
+      "lon": 19.22876,
+      "kind": "hut",
+      "rank": 3
+    },
+    {
+      "name": "Vargneset",
+      "sami": "Návdenjárga",
+      "lat": 68.57822,
+      "lon": 19.42215,
+      "kind": "point",
+      "rank": 3
+    },
+    {
+      "name": "Sandvikodden",
+      "sami": "Riđđonjárga",
+      "note": "beach ridges (Bargel 1984), heights unmeasured",
+      "note_no": "strandvoller (Bargel 1984), høyder ikke målt",
+      "x": 688600,
+      "y": 7607820,
+      "kind": "evidence",
+      "rank": 2
+    },
+    {
+      "name": "Andersholmen",
+      "note": "esker island",
+      "note_no": "eskerholme",
+      "lat": 68.50529,
+      "lon": 19.69849,
+      "kind": "island",
+      "rank": 3
+    },
+    {
+      "name": "Politioddhytta",
+      "x": 693603,
+      "y": 7608051,
+      "kind": "hut",
+      "rank": 3
+    },
+    {
+      "name": "Gjeddebukta",
+      "lat": 68.48858,
+      "lon": 19.72248,
+      "kind": "bay",
+      "rank": 3
+    },
+    {
+      "name": "Leinavatnet",
+      "sami": "Davit Lenesjávri",
+      "note": "491 m, unregulated, depth unknown",
+      "note_no": "491 moh., uregulert, ukjent dybde",
+      "x": 695162,
+      "y": 7601967,
+      "kind": "lake",
+      "rank": 1
+    },
+    {
+      "name": "Lulit Lenesjávri",
+      "x": 698787,
+      "y": 7597298,
+      "kind": "lake",
+      "rank": 3
+    },
+    {
+      "name": "Geavdnjajávri",
+      "note": "540 m",
+      "note_no": "540 moh.",
+      "lat": 68.48461,
+      "lon": 19.47035,
+      "kind": "lake",
+      "rank": 2
+    },
+    {
+      "name": "SE col ≈ 500 m",
+      "name_no": "Skar i SØ ≈ 500 moh.",
+      "note": "watershed to Torneträsk / Baltic",
+      "note_no": "vannskille mot Torneträsk / Østersjøen",
+      "x": 704640,
+      "y": 7592240,
+      "kind": "col",
+      "rank": 1
+    },
+    {
+      "name": "Torneträsk",
+      "note": "Sweden, 341 m",
+      "note_no": "Sverige, 341 moh.",
+      "x": 684000,
+      "y": 7586500,
+      "kind": "lake",
+      "rank": 2
+    },
+    {
+      "name": "Sweden",
+      "name_no": "Sverige",
+      "x": 711000,
+      "y": 7589000,
+      "kind": "country",
+      "rank": 2
+    }
+  ],
+  "datum_note": "Heights in NN2000. NVE's local levelling datum (Vassdragsnivellement L.nr. 418, FM 2B = 312.632 m) + 0.15 m = NN2000 (NVE recommendation).",
+  "natural_level_local_m": 475.8,
+  "regulated_hrv_local_m": 489.0,
+  "deglaciation": {
+    "best": 10300,
+    "min": 10000,
+    "max": 10600,
+    "nw": 10400,
+    "se": 10200
+  },
+  "se_ref": {
+    "x": 692140,
+    "y": 7607020,
+    "note": "SE end of the main basin, wet for every reachable F (used for tilt read-outs)"
+  }
+}
