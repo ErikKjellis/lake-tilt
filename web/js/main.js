@@ -8,6 +8,7 @@ import { Profile } from "./profile.js";
 import { Isochrones } from "./isochrones.js";
 import { STRINGS, applyI18n } from "./i18n.js";
 import { aboutHtml } from "./about.js";
+import { initExportUI } from "./exportui.js";
 
 const DATA = "data/altevatn";
 const $ = (id) => document.getElementById(id);
@@ -41,8 +42,9 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setClearColor(0x000000, 0);
 const maxTex = renderer.capabilities.maxTextureSize;
 const scene3 = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(36, 1, 60, 500000);
-camera.up.set(0, 0, 1);
+const perspCam = new THREE.PerspectiveCamera(36, 1, 60, 500000);
+let camera = perspCam;      // switches to an orthographic camera in map view
+perspCam.up.set(0, 0, 1);
 
 const lowEnd = params.get("q") === "low" || (params.get("q") !== "high" && (/Mobi|Android/i.test(navigator.userAgent) || (navigator.hardwareConcurrency || 8) <= 2));
 const lake = new LakeScene(data, model, lowEnd ? 2 : 1);
@@ -50,17 +52,66 @@ scene3.add(lake.group);
 
 const labelRenderer = new CSS2DRenderer({ element: $("labels") });
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.screenSpacePanning = false;
-controls.maxPolarAngle = Math.PI * 0.47;
-controls.minDistance = 1500;
-controls.maxDistance = 160000;
-controls.zoomToCursor = true;
-controls.maxTargetRadius = 40000; // keep the target on the 68 x 48 km tile (origin = tile centre)
+function makeControls(cam, map) {
+  const c = new OrbitControls(cam, renderer.domElement);
+  c.enableDamping = true;
+  c.dampingFactor = 0.08;
+  c.zoomToCursor = true;
+  c.maxTargetRadius = 40000; // keep the target on the 68 x 48 km tile (origin = tile centre)
+  if (map) {
+    c.enableRotate = false;
+    c.screenSpacePanning = true;
+    c.minZoom = 0.05; c.maxZoom = 40;
+  } else {
+    c.screenSpacePanning = false;
+    c.maxPolarAngle = Math.PI * 0.47;
+    c.minDistance = 1500;
+    c.maxDistance = 160000;
+  }
+  return c;
+}
+let controls = makeControls(perspCam, false);
+
+// ---------------------------------------------------------------- map view (orthographic, north up)
+let orthoCam = null;
+const isMapView = () => camera === orthoCam;
+/** Distance used for label visibility; for the map view, the equivalent perspective distance. */
+function viewDist() {
+  if (!isMapView()) return camera.position.distanceTo(controls.target);
+  const visH = (orthoCam.top - orthoCam.bottom) / orthoCam.zoom;
+  return visH / (2 * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2)));
+}
+function setCamMode(mode) {
+  if ((mode === "map") === isMapView()) return;
+  const target = controls.target.clone();
+  const aspect = window.innerWidth / window.innerHeight;
+  controls.dispose();
+  if (mode === "map") {
+    const dist = perspCam.position.distanceTo(target);
+    const visH = 2 * dist * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2));
+    orthoCam = new THREE.OrthographicCamera(-visH * aspect / 2, visH * aspect / 2, visH / 2, -visH / 2, 10, 800000);
+    orthoCam.up.set(0, 1, 0);                       // north up (UTM grid north)
+    orthoCam.position.set(target.x, target.y, 300000);
+    orthoCam.lookAt(target.x, target.y, 0);
+    camera = orthoCam;
+    controls = makeControls(orthoCam, true);
+    controls.target.set(target.x, target.y, 0);
+  } else {
+    const visH = (orthoCam.top - orthoCam.bottom) / orthoCam.zoom;
+    const dist = Math.min(150000, visH / (2 * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2))));
+    const dir = perspCam.position.clone().sub(perspCam.userData.lastTarget ?? new THREE.Vector3()).normalize();
+    if (!Number.isFinite(dir.x) || dir.lengthSq() < 0.5) dir.set(-0.4, -0.75, 0.55).normalize();
+    perspCam.position.copy(new THREE.Vector3(target.x, target.y, 0).addScaledVector(dir, dist));
+    camera = perspCam;
+    controls = makeControls(perspCam, false);
+    controls.target.set(target.x, target.y, 0);
+  }
+  controls.update();
+  dirty = true;
+}
 
 function setView(v, ms = 0) {
+  setCamMode("persp");
   const [tx, ty] = lake.toLocal(v.target[0], v.target[1]);
   const target = new THREE.Vector3(tx, ty, v.target[2] ?? 0);
   const az = THREE.MathUtils.degToRad(v.az), el = THREE.MathUtils.degToRad(v.el);
@@ -137,12 +188,13 @@ async function loadOrtho() {
   const W = Math.min(4096, maxTex), H = Math.round(W * h / w);
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d");
+  ctx.drawImage(data.basemaps.relief, 0, 0, W, H);   // shows where Norge i bilder has no coverage (Sweden)
   const nxT = 2, nyT = 2;
   const jobs = [];
   for (let j = 0; j < nyT; j++) for (let i = 0; i < nxT; i++) {
     const bx0 = x0 + (w * i) / nxT, bx1 = x0 + (w * (i + 1)) / nxT, by1 = y1 - (h * j) / nyT, by0 = y1 - (h * (j + 1)) / nyT;
     const pw = Math.round(W / nxT), ph = Math.round(H / nyT);
-    const url = `https://wms.geonorge.no/skwms1/wms.nib?service=WMS&version=1.3.0&request=GetMap&layers=ortofoto&styles=&crs=EPSG:25833&bbox=${bx0},${by0},${bx1},${by1}&width=${pw}&height=${ph}&format=image/jpeg`;
+    const url = `https://wms.geonorge.no/skwms1/wms.nib?service=WMS&version=1.3.0&request=GetMap&layers=ortofoto&styles=&crs=EPSG:25833&bbox=${bx0},${by0},${bx1},${by1}&width=${pw}&height=${ph}&format=image/png&transparent=true`;
     jobs.push(loadImage(url).then((img) => ctx.drawImage(img, i * pw, j * ph, pw, ph)));
   }
   await Promise.all(jobs);
@@ -181,7 +233,7 @@ const labels = meta.places.map((p) => {
   return obj;
 });
 function updateLabels(F) {
-  const dist = camera.position.distanceTo(controls.target);
+  const dist = viewDist();
   for (const o of isoLabels) {
     const { h, dr } = o.userData;
     o.position.z = (h - lake.zBase - state.frame * dr * F / 1000) * state.exag + 30;
@@ -269,6 +321,7 @@ function setLang(lang) {
   applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso();
   for (const o of labels) o.element.innerHTML = labelHtml(o.userData.p);
   if (tour.active) showStep(tour.i, false);
+  exportUI?.rerender();
   if (!$("about").classList.contains("hidden")) $("about-content").innerHTML = aboutHtml(state.lang, meta, model);
   dirty = true;
 }
@@ -283,6 +336,7 @@ $("about").addEventListener("click", (e) => { if (e.target.id === "about") $("ab
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (!$("about").classList.contains("hidden")) { $("about").classList.add("hidden"); return; }
+    if (exportUI?.isOpen()) { exportUI.close(); return; }
     if (tour.active) endTour();
     return;
   }
@@ -322,6 +376,9 @@ $("btn-shot").addEventListener("click", () => {
   a.href = cv.toDataURL("image/png");
   a.click();
 });
+
+// poster export panel (created at the end, see initExportUI)
+$("btn-export").addEventListener("click", () => exportUI?.open());
 
 // side panel collapse
 $("btn-side").addEventListener("click", () => {
@@ -597,7 +654,12 @@ function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   labelRenderer.setSize(w, h);
-  camera.aspect = w / h; camera.updateProjectionMatrix();
+  perspCam.aspect = w / h; perspCam.updateProjectionMatrix();
+  if (orthoCam) {
+    const visH = orthoCam.top - orthoCam.bottom;
+    orthoCam.left = -visH * w / h / 2; orthoCam.right = visH * w / h / 2; orthoCam.updateProjectionMatrix();
+  }
+  exportUI?.layoutFrame();
   iso.setViewport(w, h);
   shoreNow.setViewport(w, h);
   borderLines.setViewport(w, h);
@@ -610,6 +672,7 @@ let dirty = true;
 let last = performance.now(), lastDraw = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (exporting) return;   // the poster exporter drives the renderer
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (state.playing) {
     setTime(state.t - state.speed * dt);
@@ -632,8 +695,11 @@ function frame(now) {
   if (!busy && now - lastDraw < 66) return;
   lastDraw = now; labelsDirty = false;
   // keep the near plane proportional to the viewing distance
-  const dist = camera.position.distanceTo(controls.target);
-  camera.near = Math.max(20, dist / 400); camera.far = dist * 12 + 120000; camera.updateProjectionMatrix();
+  if (!isMapView()) {
+    const dist = camera.position.distanceTo(controls.target);
+    camera.near = Math.max(20, dist / 400); camera.far = dist * 12 + 120000; camera.updateProjectionMatrix();
+    perspCam.userData.lastTarget = controls.target.clone();
+  }
 
   if (dirty) {
     const F = lake.update(state);
@@ -653,6 +719,8 @@ function frame(now) {
   labelRenderer.render(scene3, camera);
 }
 let labelsDirty = true;
+let exporting = false;
+let exportUI = null;
 renderer.domElement.addEventListener("webglcontextlost", (e) => { e.preventDefault(); toast(state.lang === "no" ? "Grafikkontektsen gikk tapt – last siden på nytt." : "The graphics context was lost – please reload the page."); });
 
 // ---------------------------------------------------------------- start
@@ -670,4 +738,17 @@ try { await renderer.compileAsync(scene3, camera); } catch { /* older drivers: c
 requestAnimationFrame(frame);
 $("loading").classList.add("done");
 setTimeout(() => $("loading").remove(), 600);
-window.__lake = { state, model, lake, camera, controls, renderer, setTime, setView, VIEWS };
+exportUI = initExportUI({
+  renderer, scene: scene3, lake, model, meta, state, S, $, toast,
+  getCamera: () => camera, getControls: () => controls, setCamMode, isMapView,
+  baseTex, makeTexture, loadOrtho, DATA,
+  setExporting: (on) => { exporting = on; if (!on) { dirty = true; labelsDirty = true; } },
+  hideExtras: (on) => {
+    for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin]) {
+      if (on) { m.userData.wasVisible = m.visible; m.visible = false; } else if (m.userData.wasVisible !== undefined) m.visible = m.userData.wasVisible;
+    }
+  },
+  markDirty: () => { dirty = true; },
+  onOpen: () => { if (tour.active) endTour(); stopPlay(); leaveRegulated(); setFrame(0); },
+});
+window.__lake = { state, model, lake, get camera() { return camera; }, get controls() { return controls; }, renderer, setTime, setView, VIEWS, setCamMode, exportUI };

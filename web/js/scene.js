@@ -40,6 +40,9 @@ void main() {
 
 const TERRAIN_FS = /* glsl */ `
 uniform sampler2D uBase;
+uniform sampler2D uBaseHi;   // optional high-resolution map for part of the area (poster export)
+uniform vec4 uHiRect;        // its extent in local coordinates: x0, y0, w, h
+uniform float uHiOn;
 uniform sampler2D uMask;
 uniform vec3 uSun;
 uniform float uLightK;      // strength of 3D lighting (relief basemap already shaded)
@@ -81,6 +84,11 @@ float gridLine(float x, float width) {   // derivative of the continuous value, 
 void main() {
   vec4 m = texture2D(uMask, vUv);
   vec3 col = texture2D(uBase, vUv).rgb;
+  // sample unconditionally (implicit derivatives need uniform control flow), then select
+  vec2 uh = (vXY - uHiRect.xy) / uHiRect.zw;
+  vec3 hi = texture2D(uBaseHi, clamp(uh, 0.0, 1.0)).rgb;
+  float inHi = uHiOn * step(0.0, uh.x) * step(uh.x, 1.0) * step(0.0, uh.y) * step(uh.y, 1.0);
+  col = mix(col, hi, inHi);
   float reservoir = step(0.5, m.r);
   float surveyLake = step(0.5, m.g);
   float flooded = step(0.5, m.b);
@@ -128,7 +136,8 @@ attribute float resv;
 uniform float uExag, uZBase, uFrame, uF;
 uniform vec3 uS;            // palaeo levels of the three tracked lakes
 uniform float uRegulated;
-uniform float uHRV;
+uniform float uHRV;          // reservoir water level when regulated (HRV or LRV)
+uniform float uUseLake2;     // include Leinavatnet (third tracked lake)
 varying float vDepth;
 varying vec3 vWorld;
 void main() {
@@ -138,14 +147,15 @@ void main() {
   float W;
   float depth;
   if (uRegulated > 0.5) {
-    W = uHRV;
-    depth = resv > 0.5 ? W - h : -100.0;
+    if (resv > 0.5) { W = uHRV; depth = W - h; }
+    else if (uUseLake2 > 0.5 && uF >= iv2.x && uF <= iv2.y) { W = uS.z + dr * uF / 1000.0; depth = W - h; }
+    else { W = h; depth = -100.0; }
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, (W - uZBase) * uExag, 1.0);
   } else {
     float level = -1.0e9;
     if (uF >= iv0.x && uF <= iv0.y) level = max(level, uS.x);
     if (uF >= iv1.x && uF <= iv1.y) level = max(level, uS.y);
-    if (uF >= iv2.x && uF <= iv2.y) level = max(level, uS.z);
+    if (uUseLake2 > 0.5 && uF >= iv2.x && uF <= iv2.y) level = max(level, uS.z);
     bool known = level > -1.0e8;
     W = known ? level + dr * uF / 1000.0 : h;   // park vertices without a lake on the ground
     depth = known ? W - h : -100.0;
@@ -161,12 +171,23 @@ const WATER_FS = /* glsl */ `
 uniform vec3 uSun;
 uniform vec3 uCamPos;
 uniform float uTime;
+uniform float uFlat;         // poster export: flat fill + outline
+uniform vec3 uFlatColor;
+uniform float uFlatAlpha;
+uniform float uOutlinePx;
+uniform vec3 uOutlineColor;
 varying float vDepth;
 varying vec3 vWorld;
 void main() {
   float d = vDepth;
   float w = fwidth(d);        // before discard: derivatives need uniform control flow
   if (d <= 0.0) discard;
+  if (uFlat > 0.5) {
+    // outline = band of uOutlinePx pixels inside the shoreline (w = depth change per pixel)
+    float band = uOutlinePx > 0.0 ? 1.0 - smoothstep(uOutlinePx * w - 0.5 * w, uOutlinePx * w + 0.5 * w, d) : 0.0;
+    gl_FragColor = vec4(mix(uFlatColor, uOutlineColor, band), mix(uFlatAlpha, 1.0, band));
+    return;
+  }
   vec3 shallow = vec3(0.42, 0.78, 0.84);
   vec3 deep = vec3(0.03, 0.16, 0.30);
   vec3 col = mix(shallow, deep, 1.0 - exp(-d / 22.0));
@@ -324,6 +345,9 @@ export class LakeScene {
           uExtent: { value: new THREE.Vector4(this.x0 - this.ox, this.y1 - this.heightM - this.oy, this.width, this.heightM) },
           uBase: { value: null },
           uMask: { value: null },
+          uBaseHi: { value: null },
+          uHiRect: { value: new THREE.Vector4(0, 0, 1, 1) },
+          uHiOn: { value: 0 },
           uLightK: { value: 0.55 },
           uBaseIsMap: { value: 0 },
           uRecon: { value: 1 },
@@ -403,6 +427,12 @@ export class LakeScene {
         uS: { value: new THREE.Vector3() },
         uRegulated: { value: 0 },
         uHRV: { value: this.data.meta.regulated.hrv_m },
+        uUseLake2: { value: 1 },
+        uFlat: { value: 0 },
+        uFlatColor: { value: new THREE.Vector3(0.1, 0.4, 0.8) },
+        uFlatAlpha: { value: 1 },
+        uOutlinePx: { value: 0 },
+        uOutlineColor: { value: new THREE.Vector3(0, 0, 0) },
         uCamPos: { value: new THREE.Vector3() },
         uTime: { value: 0 },
       },
@@ -430,6 +460,8 @@ export class LakeScene {
     u.uFrame.value = state.frame;
     this.waterMat.uniforms.uS.value.set(m.level(0, F), m.level(1, F), m.level(2, F));
     this.waterMat.uniforms.uRegulated.value = state.regulated ? 1 : 0;
+    this.waterMat.uniforms.uHRV.value = state.resLevel ?? this.data.meta.regulated.hrv_m;
+    this.waterMat.uniforms.uUseLake2.value = state.useLake2 === false ? 0 : 1;
     const tu = this.terrainMat.uniforms;
     tu.uRegulated.value = state.regulated ? 1 : 0;
     tu.uOverlay.value = state.overlay;

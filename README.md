@@ -39,6 +39,18 @@ URL options:
 | Guided tour | Eight steps written for a presentation. Captions take their numbers from the model, so they follow the parameter sliders. |
 | Save image | Exports a PNG of the 3D view with the date and credits, for slides. |
 
+### Poster export (water-level overlays)
+
+**Poster export** in the title card exports separate, exactly registered images for printing or for stacking as analogue overlays (for example on transparent film):
+
+- **View:** *3D view* uses the current camera; mountains in front hide the water, as on screen. *Map (top-down)* switches to an orthographic, north-up view (UTM 33 grid north), so you can pan and zoom to frame the poster.
+- **Format and size:** A-series landscape or portrait, square, 16:9 or the whole screen, and 3000–10000 px on the long side. The panel shows the print size at 300 dpi, and a dashed frame shows what will be exported.
+- **Layers:** past water levels (cal BP, comma-separated), plus today's natural level and today's reservoir at its lowest (LRV 472.8 m) and highest (HRV 489.0 m) levels. Each layer is a transparent PNG with its own colour, fill opacity and shoreline outline. Leinavatnet can be included or left out.
+- **Background:** today's aerial photo from Norge i bilder (online). Areas without coverage (Sweden) are filled with the natural-relief map. Alternatively the relief or the topographic map.
+- **Output:** one ZIP with `00_background_*.jpg`, `01_water_*.png` …, `preview_all_layers.jpg`, `legend.svg` and `info.txt`. The info file lists the layers, model parameters, credits and a *view code* that restores the exact viewpoint. In map mode every image also gets a world file (`.pgw`/`.jgw`) and `.prj` (EPSG:25833), so it opens georeferenced in QGIS or ArcGIS.
+
+All images share the same camera, crop and pixel size, so they line up exactly when stacked. Past water levels are model results; the aerial photo is © Norge i bilder (check its terms before printing).
+
 ### Keyboard (presenting)
 
 | Key | Action |
