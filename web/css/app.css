@@ -223,3 +223,17 @@ details.model[open] summary { margin-bottom: 4px; }
 #export .ex-code summary { cursor: pointer; font-size: 12.5px; color: var(--muted); margin-top: 12px; }
 #export-frame { position: absolute; z-index: 1; border: 2px dashed #f2b25c; box-shadow: 0 0 0 9999px rgba(5, 10, 14, 0.45); pointer-events: none; }
 #app.exporting #titlecard, #app.exporting #side, #app.exporting #profile, #app.exporting #timeline, #app.exporting .legend, #app.exporting #caption { display: none !important; }
+
+/* cultural heritage sites */
+.km-cats { display: grid; gap: 4px; margin: 2px 0 2px 22px; font-size: 12.5px; }
+.km-cats em { font-style: normal; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.sym { display: inline-block; width: 11px; height: 11px; flex: none; box-shadow: 0 0 0 1.5px #fff inset; }
+.sym.s0 { background: #e63946; border-radius: 50%; }
+.sym.s1 { background: #f4a261; clip-path: polygon(50% 4%, 96% 92%, 4% 92%); box-shadow: none; }
+.sym.s2 { background: #9d4edd; }
+.sym.s3 { background: #adb5bd; transform: rotate(45deg) scale(0.82); }
+#km-tip { pointer-events: none; z-index: 8; max-width: 320px; padding: 9px 11px; font-size: 12.5px; }
+#km-tip h4 { margin: 0 0 4px; font-size: 13.5px; display: flex; gap: 6px; align-items: center; }
+#km-tip p { margin: 3px 0; color: #cfdce4; }
+#km-tip .k { color: var(--muted); }
+#km-tip .hint { color: var(--accent); font-size: 11.5px; margin-top: 5px; }

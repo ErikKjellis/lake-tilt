@@ -39,6 +39,19 @@ URL options:
 | Guided tour | Eight steps written for a presentation. Captions take their numbers from the model, so they follow the parameter sliders. |
 | Save image | Exports a PNG of the 3D view with the date and credits, for slides. |
 
+### Cultural heritage sites (kulturminner)
+
+The **Cultural heritage sites** checkbox shows Riksantikvaren's registered sites (558 in the area; 13 marked as removed are left out) as markers draped on the terrain. Hover a marker for its type, dating, monuments and protection status; click to open it in Kulturminnesøk. Each site is classified from the site and its individual monuments (`tools/fetch_kulturminner.py`):
+
+| Category | Marker | Rule | Sites |
+|---|---|---|---|
+| Sami | red circle | protected as Sami heritage (KML §4 second paragraph, 1917 or older), dated *Samisk jernalder*, or, when not Stone Age dated, a monument type diagnostic of Sami culture (árran, gamme, offering site/sieidi, reindeer fence, meat cache, bow-hunting stand) | 410 |
+| Stone Age | orange triangle | dated to the Stone Age (incl. *sein steinbrukende tid*, *steinalder – bronsealder*) | 16 |
+| Modern | violet square | all datings after the Reformation (1537 or later) | 15 |
+| Other / undated | grey diamond (off by default) | metal ages, Middle Ages, *eldre enn 100 år*, undated (mostly hearths and pitfall traps) | 117 |
+
+The shapes differ as well as the colours, so the categories stay distinct in black-and-white print. Data: Riksantikvaren, *Kulturminner – Lokaliteter, Enkeltminner og Sikringssoner* (open data, WFS `wfs.geonorge.no/skwms1/wfs.kulturminner`). Update with `python tools/fetch_kulturminner.py`.
+
 ### Poster export (water-level overlays)
 
 **Poster export** in the title card exports separate, exactly registered images for printing or for stacking as analogue overlays (for example on transparent film):
@@ -46,6 +59,7 @@ URL options:
 - **View:** *3D view* uses the current camera; mountains in front hide the water, as on screen. *Map (top-down)* switches to an orthographic, north-up view (UTM 33 grid north), so you can pan and zoom to frame the poster.
 - **Format and size:** A-series landscape or portrait, square, 16:9 or the whole screen, and 3000–10000 px on the long side. The panel shows the print size at 300 dpi, and a dashed frame shows what will be exported.
 - **Layers:** past water levels (cal BP, comma-separated), plus today's natural level and today's reservoir at its lowest (LRV 472.8 m) and highest (HRV 489.0 m) levels. Each layer is a transparent PNG with its own colour, fill opacity and shoreline outline. Leinavatnet can be included or left out.
+- **Cultural heritage sites:** one transparent PNG per selected category (marker size in pixels), plus `kulturminner.geojson` with all exported sites as points (EPSG:25833).
 - **Background:** today's aerial photo from Norge i bilder (online). Areas without coverage (Sweden) are filled with the natural-relief map. Alternatively the relief or the topographic map.
 - **Output:** one ZIP with `00_background_*.jpg`, `01_water_*.png` …, `preview_all_layers.jpg`, `legend.svg` and `info.txt`. The info file lists the layers, model parameters, credits and a *view code* that restores the exact viewpoint. In map mode every image also gets a world file (`.pgw`/`.jgw`) and `.prj` (EPSG:25833), so it opens georeferenced in QGIS or ArcGIS.
 
@@ -127,6 +141,7 @@ python tools/export_web.py
 - Terrain: © Kartverket, DTM via Geonorge WCS (CC BY 4.0).
 - Bathymetry, lakes, dams: NVE. The depth maps are for non-commercial use only and must not be used for navigation.
 - Land uplift: NKG2016LU (Vestøl et al. 2019, J. Geodesy 93:1759), from Lantmäteriet / NKG.
+- Cultural heritage sites: Riksantikvaren (open data, NLOD).
 - Regulation history: Devik (1959, NVE); the OED 2022 concession revision; Statkraft (2009).
 - Quaternary geology: Bargel (1984), NGU Skrifter 52; Andersen (1968), NGU 256.
 - Maps: © Kartverket. Aerial photos: Norge i bilder (online view only).

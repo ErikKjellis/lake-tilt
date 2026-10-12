@@ -92,10 +92,10 @@ void main() {
   float reservoir = step(0.5, m.r);
   float surveyLake = step(0.5, m.g);
   float flooded = step(0.5, m.b);
-  if (uBaseIsMap > 0.5 && uRegulated < 0.5 && reservoir > 0.5) {
-    col = uBaseIsMap > 1.5
-      ? (surveyLake > 0.5 ? vec3(0.30, 0.33, 0.32) : vec3(0.40, 0.41, 0.33))   // aerial photo tones
-      : (surveyLake > 0.5 ? vec3(0.62, 0.66, 0.66) : vec3(0.80, 0.78, 0.71));
+  // Kartverket maps draw today's reservoir as water: repaint it neutral in the natural view.
+  // The aerial photo (uBaseIsMap = 2) is shown as it is.
+  if (uBaseIsMap > 0.5 && uBaseIsMap < 1.5 && uRegulated < 0.5 && reservoir > 0.5) {
+    col = surveyLake > 0.5 ? vec3(0.62, 0.66, 0.66) : vec3(0.80, 0.78, 0.71);
   }
   float diff = max(dot(normalize(vN), uSun), 0.0);
   float shade = mix(1.0, 0.45 + 0.75 * diff, uLightK);
@@ -103,9 +103,9 @@ void main() {
 
   if (uRecon > 0.5 && uRegulated < 0.5 && flooded > 0.5) {
     float h = fract((vXY.x + vXY.y) / 240.0);
-    float hatch = 1.0 - smoothstep(0.0, 0.12, abs(h - 0.5) * 2.0 - 0.86);
+    float hatch = 1.0 - smoothstep(0.0, 0.10, abs(h - 0.5) * 2.0 - 0.92);
     hatch *= 1.0 - smoothstep(0.15, 0.4, fwidth((vXY.x + vXY.y) / 240.0));
-    col = mix(col, vec3(0.98, 0.82, 0.45), 0.32 * hatch + 0.06);
+    col = mix(col, vec3(0.98, 0.82, 0.45), 0.30 * hatch);
   }
 
   if (uOverlay == 1) {

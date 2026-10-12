@@ -9,6 +9,7 @@ import { Isochrones } from "./isochrones.js";
 import { STRINGS, applyI18n } from "./i18n.js";
 import { aboutHtml } from "./about.js";
 import { initExportUI } from "./exportui.js";
+import { Heritage, KM_CATS } from "./heritage.js";
 
 const DATA = "data/altevatn";
 const $ = (id) => document.getElementById(id);
@@ -16,6 +17,7 @@ const params = new URLSearchParams(location.search);
 
 const state = {
   t: T_NOW, exag: 3, frame: 0, overlay: 0, iso: true, labels: true, regulated: false, recon: true, border: true,
+  km: false, kmCats: [true, true, true, false],
   lang: (() => { const q = params.get("lang"); if (q === "no" || q === "en") return q; try { return localStorage.getItem("altevatn.lang") === "no" ? "no" : "en"; } catch { return "en"; } })(),
   basemap: "relief", playing: false, speed: 500,
 };
@@ -213,6 +215,51 @@ scene3.add(profileTrack.mesh);
 const pin = new THREE.Mesh(new THREE.CylinderGeometry(60, 60, 1, 12), new THREE.MeshBasicMaterial({ color: 0xf2b25c }));
 pin.rotation.x = Math.PI / 2; pin.visible = false; scene3.add(pin);
 
+// ---------------------------------------------------------------- cultural heritage sites
+let heritage = null;
+fetch(`${DATA}/kulturminner.json`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+  if (!d?.sites?.length) return;
+  heritage = new Heritage(lake, model, d);
+  heritage.setCategories(state.kmCats);
+  heritage.setSize(10 * renderer.getPixelRatio());
+  scene3.add(heritage.points);
+  KM_CATS.forEach((c, i) => { const el = document.querySelector(`[data-kmcount="${i}"]`); if (el) el.textContent = `(${d.counts[c] ?? 0})`; });
+  $("km-toggle").classList.remove("hidden");
+  dirty = true;
+}).catch(() => {});
+$("c-km").addEventListener("change", (e) => { state.km = e.target.checked; $("km-cats").classList.toggle("hidden", !state.km); updateAttribution(); dirty = true; });
+for (const cb of document.querySelectorAll("[data-kmcat]")) cb.addEventListener("change", (e) => {
+  state.kmCats[Number(e.target.dataset.kmcat)] = e.target.checked; heritage?.setCategories(state.kmCats); dirty = true;
+});
+// hover: details; click: open the site in Kulturminnesøk
+const kmTip = $("km-tip");
+let kmHover = null, downXY = null;
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (!heritage || !state.km || exporting) { if (kmHover) { kmHover = null; kmTip.classList.add("hidden"); } return; }
+  const hit = heritage.pick(e.offsetX, e.offsetY, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state);
+  kmHover = hit?.site ?? null;
+  renderer.domElement.style.cursor = kmHover ? "pointer" : "";
+  if (!kmHover) { kmTip.classList.add("hidden"); return; }
+  const L = S(), s = kmHover;
+  const catName = L[`km_${s.cat}`] ?? s.cat;
+  const mons = s.monuments.map(([a, n]) => (n > 1 ? `${a} ×${n}` : a)).join(", ");
+  kmTip.innerHTML = `<h4><i class="sym s${s.c}"></i>${s.name || s.art || catName}</h4>`
+    + `<p><span class="k">${catName}</span>${s.art && s.name ? ` · ${s.art}` : ""}</p>`
+    + (s.dating.length ? `<p><span class="k">${L.km_dating}:</span> ${s.dating.join(", ")}</p>` : "")
+    + (mons ? `<p><span class="k">${L.km_monuments}:</span> ${mons}</p>` : "")
+    + (s.vern ? `<p><span class="k">${L.km_protection}:</span> ${s.vern}</p>` : "")
+    + (s.info ? `<p>${s.info.replace(/</g, "&lt;")}</p>` : "")
+    + (s.link ? `<p class="hint">${L.km_open}</p>` : "");
+  kmTip.classList.remove("hidden");
+  const tw = kmTip.offsetWidth, th = kmTip.offsetHeight;
+  kmTip.style.left = `${Math.min(window.innerWidth - tw - 8, e.clientX + 14)}px`;
+  kmTip.style.top = `${Math.min(window.innerHeight - th - 8, e.clientY + 14)}px`;
+});
+renderer.domElement.addEventListener("pointerdown", (e) => { downXY = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (kmHover?.link && downXY && Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]) < 4) window.open(kmHover.link, "_blank", "noopener");
+});
+
 // ---------------------------------------------------------------- labels
 function labelHtml(p) {
   const no = state.lang === "no";
@@ -404,7 +451,8 @@ function updateAttribution() {
   }[state.basemap];
   $("attrib").textContent = map + (no
     ? "Terreng: Kartverket DTM (CC BY 4.0). Dybdekart og innsjøer: NVE. Landheving: NKG2016LU."
-    : "Terrain: Kartverket DTM (CC BY 4.0). Bathymetry & lakes: NVE. Land uplift: NKG2016LU.");
+    : "Terrain: Kartverket DTM (CC BY 4.0). Bathymetry & lakes: NVE. Land uplift: NKG2016LU.")
+    + (state.km ? (no ? " Kulturminner: Riksantikvaren." : " Heritage sites: Riksantikvaren.") : "");
 }
 
 let toastTimer;
@@ -704,6 +752,7 @@ function frame(now) {
   if (dirty) {
     const F = lake.update(state);
     borderLines.mesh.visible = state.border;
+    if (heritage) heritage.points.visible = state.km;
     iso.mesh.visible = state.iso && !state.regulated;
     shoreNow.mesh.visible = !state.regulated && Math.abs(state.t - T_NOW) > 30;
     updateReadouts(F);
@@ -744,11 +793,12 @@ exportUI = initExportUI({
   baseTex, makeTexture, loadOrtho, DATA,
   setExporting: (on) => { exporting = on; if (!on) { dirty = true; labelsDirty = true; } },
   hideExtras: (on) => {
-    for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin]) {
+    for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin, heritage?.points].filter(Boolean)) {
       if (on) { m.userData.wasVisible = m.visible; m.visible = false; } else if (m.userData.wasVisible !== undefined) m.visible = m.userData.wasVisible;
     }
   },
   markDirty: () => { dirty = true; },
+  getHeritage: () => heritage,
   onOpen: () => { if (tour.active) endTour(); stopPlay(); leaveRegulated(); setFrame(0); },
 });
-window.__lake = { state, model, lake, get camera() { return camera; }, get controls() { return controls; }, renderer, setTime, setView, VIEWS, setCamMode, exportUI };
+window.__lake = { get heritage() { return heritage; }, state, model, lake, get camera() { return camera; }, get controls() { return controls; }, renderer, setTime, setView, VIEWS, setCamMode, exportUI };

@@ -29,4 +29,5 @@ web/data/ are derived from third-party data and keep their own terms:
 - Lake depth data and lake outlines: NVE (Norges vassdrags- og energidirektorat).
   Credit NVE; depth data for non-commercial use only and not for navigation.
 - Land uplift: NKG2016LU (Nordic Geodetic Commission / Lantmateriet), CC BY 4.0.
+- Cultural heritage sites (kulturminner.json): Riksantikvaren, open data (NLOD) - credit Riksantikvaren.
 - three.js (web/vendor/three): MIT, (c) three.js authors (see its LICENSE file).

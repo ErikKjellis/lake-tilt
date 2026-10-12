@@ -60,28 +60,32 @@ export class PosterExporter {
   constructor(app) { this.app = app; }
 
   /** Render the scene in tiles into a W x H canvas, cropped to `crop` of the viewport. */
-  renderToCanvas(camera, W, H, crop, clear) {
+  renderToCanvas(camera, W, H, crop, clear, pad = 0) {
     const { renderer, scene } = this.app;
     const s = W / crop.w;
     const fullW = crop.vw * s, fullH = crop.vh * s;
-    const rt = new THREE.WebGLRenderTarget(TILE, TILE, { samples: Math.min(4, renderer.capabilities.maxSamples || 0) });
+    const rt = new THREE.WebGLRenderTarget(TILE + 2 * pad, TILE + 2 * pad, { samples: Math.min(4, renderer.capabilities.maxSamples || 0) });
     const out = document.createElement("canvas"); out.width = W; out.height = H;
     const octx = out.getContext("2d");
     const prevRT = renderer.getRenderTarget();
     const prevClear = renderer.getClearColor(new THREE.Color()), prevAlpha = renderer.getClearAlpha();
-    const buf = new Uint8Array(TILE * TILE * 4);
+    const buf = new Uint8Array((TILE + 2 * pad) * (TILE + 2 * pad) * 4);
     for (let ty = 0; ty < H; ty += TILE) for (let tx = 0; tx < W; tx += TILE) {
       const tw = Math.min(TILE, W - tx), th = Math.min(TILE, H - ty);
-      rt.setSize(tw, th);
-      camera.setViewOffset(fullW, fullH, crop.x * s + tx, crop.y * s + ty, tw, th);
+      const rw = tw + 2 * pad, rh = th + 2 * pad;   // render with a margin, keep the centre
+      rt.setSize(rw, rh);
+      camera.setViewOffset(fullW, fullH, crop.x * s + tx - pad, crop.y * s + ty - pad, rw, rh);
       camera.updateProjectionMatrix();
       renderer.setRenderTarget(rt);
       renderer.setClearColor(clear.color, clear.alpha);
       renderer.clear(true, true, true);
       renderer.render(scene, camera);
-      renderer.readRenderTargetPixels(rt, 0, 0, tw, th, buf);
+      renderer.readRenderTargetPixels(rt, 0, 0, rw, rh, buf);
       const img = octx.createImageData(tw, th);
-      for (let r = 0; r < th; r++) img.data.set(buf.subarray((th - 1 - r) * tw * 4, (th - r) * tw * 4), r * tw * 4);
+      for (let r = 0; r < th; r++) {
+        const srcRow = rh - 1 - (r + pad);   // GL rows are bottom-up
+        img.data.set(buf.subarray((srcRow * rw + pad) * 4, (srcRow * rw + pad + tw) * 4), r * tw * 4);
+      }
       octx.putImageData(img, tx, ty);
     }
     camera.clearViewOffset();
@@ -239,6 +243,34 @@ export class PosterExporter {
       for (const p of order) pctx.drawImage(p.small, 0, 0);
       pctx.globalAlpha = 1;
 
+      // ---------------------------------------------------------------- cultural heritage sites
+      const km = opts.km;
+      if (km?.heritage && km.files.length) {
+        const Hg = km.heritage, prevOn = [...(Hg.on ?? [true, true, true, false])], prevSize = Hg.material.uniforms.uSize.value;
+        const gl = this.app.renderer.getContext();
+        const maxPt = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)?.[1] ?? 64;
+        const size = Math.min(km.size, maxPt);
+        lake.update({ ...opts.baseState, t: T_NOW, regulated: false, frame: 0, overlay: 0, iso: false, exag: opts.exag });
+        lake.water.visible = false; lake.terrain.visible = true; lake.terrainMat.colorWrite = false;
+        Hg.points.visible = true;
+        Hg.setSize(size);
+        try {
+          for (const f of km.files) {
+            progress?.(`${opts.L.ex_km}: ${f.label}`);
+            await new Promise((r) => setTimeout(r, 0));
+            Hg.setCategories([0, 1, 2, 3].map((c) => c === f.cat));
+            const cv = this.renderToCanvas(cam, opts.W, opts.H, opts.crop, { color: 0x000000, alpha: 0 }, Math.ceil(size / 2) + 2);
+            files.push({ name: f.file, data: await blobBytes(await canvasBlob(cv, "image/png")) });
+            if (isMap) files.push(...this.worldFiles(f.file, bbox, opts.W, opts.H, "pgw"));
+            pctx.drawImage(cv, 0, 0, preview.width, preview.height);
+          }
+          files.push({ name: "kulturminner.geojson", data: Hg.geojson([0, 1, 2, 3].map((c) => km.files.some((f) => f.cat === c))) });
+        } finally {
+          Hg.setCategories(prevOn); Hg.setSize(prevSize);
+        }
+        if (size < km.size) km.note = `marker size limited to ${size} px by the GPU`;
+      }
+
       progress?.(opts.L.ex_p_zip);
       files.push({ name: "preview_all_layers.jpg", data: await blobBytes(await canvasBlob(preview, "image/jpeg", 0.88)) });
       files.push({ name: "legend.svg", data: this.legendSvg(opts) });
@@ -262,13 +294,23 @@ export class PosterExporter {
   }
 
   legendSvg(opts) {
-    const rowH = 34, w = 640, h = 44 + rowH * opts.layers.length + 30;
+    const kmRows = opts.km?.files ?? [];
+    const rowH = 34, w = 640, h = 44 + rowH * (opts.layers.length + kmRows.length) + 30;
     const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const rows = opts.layers.map((Ly, i) => {
       const y = 44 + i * rowH;
       const c = new THREE.Color(Ly.color).multiplyScalar(0.55).getHexString();
       return `<rect x="16" y="${y}" width="44" height="22" rx="3" fill="${Ly.color}" fill-opacity="${opts.fillAlpha}" stroke="#${c}" stroke-width="2.5"/>` +
         `<text x="72" y="${y + 16}" font-size="15">${esc(Ly.label)}</text>`;
+    }).join("\n") + "\n" + kmRows.map((f, j) => {
+      const y = 44 + (opts.layers.length + j) * rowH, cx = 38, cy = y + 11, col = f.colour;
+      const shape = [
+        `<circle cx="${cx}" cy="${cy}" r="9"/>`,
+        `<polygon points="${cx},${cy - 10} ${cx + 10},${cy + 8} ${cx - 10},${cy + 8}"/>`,
+        `<rect x="${cx - 8}" y="${cy - 8}" width="16" height="16"/>`,
+        `<polygon points="${cx},${cy - 10} ${cx + 10},${cy} ${cx},${cy + 10} ${cx - 10},${cy}"/>`,
+      ][f.cat];
+      return `<g fill="${col}" stroke="#ffffff" stroke-width="2">${shape}</g><text x="72" y="${y + 16}" font-size="15">${esc(f.label)}</text>`;
     }).join("\n");
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="Segoe UI, Helvetica, Arial, sans-serif">
 <rect width="100%" height="100%" fill="#ffffff"/>
@@ -292,6 +334,9 @@ ${rows}
       "Layers (bottom to top):",
       ...(opts.background !== "none" ? [`  00  background: ${opts.background === "ortho" ? "aerial photo of today (Norge i bilder)" : opts.background}`] : []),
       ...opts.layers.map((Ly) => `  ${Ly.file}  ${Ly.label}  [${Ly.color}]`),
+      ...(opts.km?.files ?? []).map((f) => `  ${f.file}  ${f.label}  [${f.colour}]`),
+      ...(opts.km?.files?.length ? ["  kulturminner.geojson  heritage sites as points (EPSG:25833) with category, type, dating, protection and Kulturminnesøk link",
+        `  Heritage marker size ${opts.km.size} px${opts.km.note ? ` (${opts.km.note})` : ""}. Categories: Sami = KML §4.2 / Sami Iron Age / Sami monument type; Stone Age = Stone Age dating; modern = after 1537; other = metal ages, Middle Ages, undated.`] : []),
       "",
       `Water style: fill opacity ${Math.round(opts.fillAlpha * 100)} %, outline ${opts.outlinePx} px (inside the shoreline). Leinavatnet ${opts.useLake2 ? "included" : "excluded"}.`,
       "All images share the same camera, crop and pixel size, so they register exactly when stacked.",
@@ -303,6 +348,7 @@ ${rows}
       "  Aerial photo: © Norge i bilder (Kartverket, Geovekst og kommunene). Check the Norge i bilder terms before printing or publishing.",
       "  Terrain: Kartverket DTM (CC BY 4.0). Lake depth data and outlines: NVE (non-commercial use, not for navigation).",
       "  Land uplift: NKG2016LU. Reconstruction and model: https://github.com/ErikKjellis/lake-tilt",
+      ...(opts.km?.files?.length ? ["  Cultural heritage sites: Riksantikvaren, Kulturminner - Lokaliteter (open data, NLOD); see kulturminnesok.no."] : []),
       `  ${L.ex_caveat}`,
     ];
     void formatYear; void meta;

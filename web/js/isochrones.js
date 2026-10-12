@@ -16,7 +16,9 @@ float rateAt(vec2 p){ vec2 q=(p-uRateCentre)/1000.0; return uRateC[0]+uRateC[1]*
 vec4 project(vec3 p) {
   float z = p.z - uFrame * (rateAt(p.xy) - uRref) * uF / 1000.0;
   vec4 mv = modelViewMatrix * vec4(p.xy, (z - uZBase) * uExag, 1.0);
-  mv.xyz *= 0.995;   // pull towards the camera so the ribbon is not buried in the terrain facets
+  // keep it in front of the terrain facets: perspective = move along the view ray,
+  // orthographic (map view) = move in depth only, so the map position is unchanged
+  if (projectionMatrix[3][3] > 0.5) mv.z += (1.0 - 0.995) * abs(mv.z); else mv.xyz *= 0.995;
   return projectionMatrix * mv;
 }
 void main() {

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { PosterExporter } from "./exporter.js";
 import { formatYear, T_NOW } from "./model.js";
 import { loadImage } from "./data.js";
+import { KM_COLOURS } from "./heritage.js";
 
 const PAST_COLOURS = ["#6a1b9a", "#283593", "#00838f", "#2e7d32", "#9e9d24", "#ef6c00", "#c62828", "#6d4c41", "#ad1457", "#455a64"];
 const TODAY_COLOURS = { natural: "#37474f", lrv: "#4fc3f7", hrv: "#0d47a1" };
@@ -15,6 +16,7 @@ export function initExportUI(app) {
     open: false, mode: "persp", aspect: "aland", long: 6000, background: "ortho",
     times: "10000, 8000, 6000, 4000, 2000", natural: false, lrv: true, hrv: true, useLake2: true,
     fill: 0.85, outline: 3, colours: {},
+    km: false, kmCats: [true, true, true, false], kmSize: 26,
   };
 
   // ------------------------------------------------------------------ DOM
@@ -55,6 +57,16 @@ export function initExportUI(app) {
         <label><input type="checkbox" id="ex-hrv" ${ui.hrv ? "checked" : ""}> ${L.ex_hrv}</label>
         <label><input type="checkbox" id="ex-lake2" ${ui.useLake2 ? "checked" : ""}> ${L.ex_lake2}</label>
       </div>
+      ${app.getHeritage() ? `<h2 class="ex-sub">${L.ex_km}</h2>
+      <div class="checks">
+        <label><input type="checkbox" id="ex-km" ${ui.km ? "checked" : ""}> ${L.ex_km}</label>
+        <div class="km-cats ${ui.km ? "" : "hidden"}" id="ex-km-cats">
+          ${["sami", "stone", "modern", "other"].map((c, i) => `<label><input type="checkbox" data-exkm="${i}" ${ui.kmCats[i] ? "checked" : ""}> <i class="sym s${i}"></i>${L[`km_${c}`]}</label>`).join("")}
+        </div>
+      </div>
+      <label class="row"><span>${L.ex_km_size}</span><output id="ex-kmsize-o">${ui.kmSize} px</output></label>
+      <input type="range" id="ex-kmsize" min="8" max="96" step="2" value="${ui.kmSize}">
+      <p class="fine">${L.ex_km_hint}</p>` : ""}
       <h2 class="ex-sub">${L.ex_layers}</h2>
       <ol class="ex-layers" id="ex-layers"></ol>
       <label class="row"><span>${L.ex_fill}</span><output id="ex-fill-o">${Math.round(ui.fill * 100)} %</output></label>
@@ -96,9 +108,19 @@ export function initExportUI(app) {
     return out;
   }
 
+  function kmFiles(offset) {
+    if (!ui.km || !app.getHeritage()) return [];
+    const L = S(), stems = ["samiske", "steinalder", "nyere_tid", "annet_udatert"], keys = ["sami", "stone", "modern", "other"];
+    return [0, 1, 2, 3].filter((c) => ui.kmCats[c]).map((c, j) => ({
+      cat: c, colour: KM_COLOURS[c], label: L.ex_lab_km(L[`km_${keys[c]}`]),
+      file: `${String(offset + j + 1).padStart(2, "0")}_kulturminner_${stems[c]}.png`,
+    }));
+  }
+
   function renderLayers() {
     const box = $("ex-layers");
-    box.innerHTML = layers().map((Ly) => `<li><input type="color" value="${Ly.colour}" data-key="${Ly.key}" aria-label="colour"><span>${Ly.label}</span></li>`).join("");
+    box.innerHTML = layers().map((Ly) => `<li><input type="color" value="${Ly.colour}" data-key="${Ly.key}" aria-label="colour"><span>${Ly.label}</span></li>`).join("")
+      + kmFiles(layers().length).map((f) => `<li><i class="sym s${f.cat}" style="margin:0 9px 0 9px"></i><span>${f.label}</span></li>`).join("");
     for (const inp of box.querySelectorAll("input[type=color]")) inp.addEventListener("input", (e) => { ui.colours[e.target.dataset.key] = e.target.value; });
   }
 
@@ -114,6 +136,11 @@ export function initExportUI(app) {
     $("ex-times").addEventListener("input", (e) => { ui.times = e.target.value; renderLayers(); });
     for (const [id, key] of [["ex-natural", "natural"], ["ex-lrv", "lrv"], ["ex-hrv", "hrv"], ["ex-lake2", "useLake2"]]) {
       $(id).addEventListener("change", (e) => { ui[key] = e.target.checked; renderLayers(); });
+    }
+    if (app.getHeritage()) {
+      $("ex-km").addEventListener("change", (e) => { ui.km = e.target.checked; $("ex-km-cats").classList.toggle("hidden", !ui.km); renderLayers(); });
+      for (const cb of panel.querySelectorAll("[data-exkm]")) cb.addEventListener("change", (e) => { ui.kmCats[Number(e.target.dataset.exkm)] = e.target.checked; renderLayers(); });
+      $("ex-kmsize").addEventListener("input", (e) => { ui.kmSize = Number(e.target.value); $("ex-kmsize-o").textContent = `${ui.kmSize} px`; });
     }
     $("ex-fill").addEventListener("input", (e) => { ui.fill = Number(e.target.value); $("ex-fill-o").textContent = `${Math.round(ui.fill * 100)} %`; });
     $("ex-outline").addEventListener("input", (e) => { ui.outline = Number(e.target.value); $("ex-outline-o").textContent = `${ui.outline} px`; });
@@ -201,7 +228,8 @@ export function initExportUI(app) {
     const L = S();
     const btn = $("ex-run"), prog = $("ex-progress");
     const lys = layers();
-    if (!lys.length) { prog.textContent = L.ex_nolayers; return; }
+    const kmf = kmFiles(lys.length);
+    if (!lys.length && !kmf.length) { prog.textContent = L.ex_nolayers; return; }
     btn.disabled = true;
     const { W, H } = outSize();
     const c = crop();
@@ -215,6 +243,7 @@ export function initExportUI(app) {
         fillAlpha: ui.fill, outlinePx: ui.outline, background: ui.background, useLake2: ui.useLake2,
         exag: ui.mode === "map" ? 1 : state().exag, baseState: { ...state() }, lang: state().lang,
         baseTextures: app.baseTex, viewCode: viewCode(), L,
+        km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize } : null,
       }, (msg) => { prog.textContent = msg; });
       const a = document.createElement("a");
       const day = new Date().toISOString().slice(0, 10);
@@ -237,6 +266,7 @@ export function initExportUI(app) {
     app.onOpen();
     ui.open = true;
     ui.mode = app.isMapView() ? "map" : "persp";
+    ui.km = app.state.km; ui.kmCats = [...app.state.kmCats];
     render();
     panel.classList.remove("hidden"); frame.classList.remove("hidden");
     document.getElementById("app").classList.add("exporting");
