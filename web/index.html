@@ -81,9 +81,11 @@
         <label id="km-toggle" class="hidden"><input type="checkbox" id="c-km"> <span data-i18n="c_km">Cultural heritage sites</span></label>
         <div class="km-cats hidden" id="km-cats">
           <label><input type="checkbox" data-kmcat="0" checked> <i class="sym s0"></i><span data-i18n="km_sami">Sami</span><em data-kmcount="0"></em></label>
-          <label><input type="checkbox" data-kmcat="1" checked> <i class="sym s1"></i><span data-i18n="km_stone">Stone Age</span><em data-kmcount="1"></em></label>
-          <label><input type="checkbox" data-kmcat="2" checked> <i class="sym s2"></i><span data-i18n="km_modern">Modern (after 1537)</span><em data-kmcount="2"></em></label>
-          <label><input type="checkbox" data-kmcat="3"> <i class="sym s3"></i><span data-i18n="km_other">Other / undated</span><em data-kmcount="3"></em></label>
+          <label><input type="checkbox" data-kmcat="1" checked> <i class="sym s1"></i><span data-i18n="km_stone">Stone Age &amp; Early Metal Age</span><em data-kmcount="1"></em></label>
+          <label><input type="checkbox" data-kmcat="2" checked> <i class="sym s2"></i><span data-i18n="km_iron">Iron Age &amp; Middle Ages</span><em data-kmcount="2"></em></label>
+          <label><input type="checkbox" data-kmcat="3" checked> <i class="sym s3"></i><span data-i18n="km_modern">Modern (after 1537)</span><em data-kmcount="3"></em></label>
+          <label><input type="checkbox" data-kmcat="4"> <i class="sym s4"></i><span data-i18n="km_other">Other / undated</span><em data-kmcount="4"></em></label>
+          <p class="fine" data-i18n="km_polys">Zoom in to see the site outlines (solid) and safety zones (dashed).</p>
         </div>
       </div>
     </section>
@@ -111,6 +113,7 @@
   </section>
 
   <div id="km-tip" class="panel hidden" role="tooltip"></div>
+  <div id="km-pop" class="panel hidden" role="dialog"></div>
 
   <div id="caption" class="panel hidden" role="status" aria-live="polite">
     <div class="cap-head"><span id="cap-step"></span><h3 id="cap-title"></h3><div class="lang small" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="no">NO</button></div></div>

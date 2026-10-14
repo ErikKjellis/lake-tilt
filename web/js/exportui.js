@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { PosterExporter } from "./exporter.js";
 import { formatYear, T_NOW } from "./model.js";
 import { loadImage } from "./data.js";
-import { KM_COLOURS } from "./heritage.js";
+import { KM_CATS, KM_COLOURS } from "./heritage.js";
 
 const PAST_COLOURS = ["#6a1b9a", "#283593", "#00838f", "#2e7d32", "#9e9d24", "#ef6c00", "#c62828", "#6d4c41", "#ad1457", "#455a64"];
 const TODAY_COLOURS = { natural: "#37474f", lrv: "#4fc3f7", hrv: "#0d47a1" };
@@ -16,7 +16,7 @@ export function initExportUI(app) {
     open: false, mode: "persp", aspect: "aland", long: 6000, background: "ortho",
     times: "10000, 8000, 6000, 4000, 2000", natural: false, lrv: true, hrv: true, useLake2: true,
     fill: 0.85, outline: 3, colours: {},
-    km: false, kmCats: [true, true, true, false], kmSize: 26,
+    km: false, kmCats: [true, true, true, true, false], kmPolys: true, kmSize: 26,
   };
 
   // ------------------------------------------------------------------ DOM
@@ -61,7 +61,8 @@ export function initExportUI(app) {
       <div class="checks">
         <label><input type="checkbox" id="ex-km" ${ui.km ? "checked" : ""}> ${L.ex_km}</label>
         <div class="km-cats ${ui.km ? "" : "hidden"}" id="ex-km-cats">
-          ${["sami", "stone", "modern", "other"].map((c, i) => `<label><input type="checkbox" data-exkm="${i}" ${ui.kmCats[i] ? "checked" : ""}> <i class="sym s${i}"></i>${L[`km_${c}`]}</label>`).join("")}
+          ${KM_CATS.map((c, i) => `<label><input type="checkbox" data-exkm="${i}" ${ui.kmCats[i] ? "checked" : ""}> <i class="sym s${i}"></i>${L[`km_${c}`]}</label>`).join("")}
+          <label><input type="checkbox" id="ex-kmpolys" ${ui.kmPolys ? "checked" : ""}> ${L.ex_km_polys}</label>
         </div>
       </div>
       <label class="row"><span>${L.ex_km_size}</span><output id="ex-kmsize-o">${ui.kmSize} px</output></label>
@@ -110,9 +111,9 @@ export function initExportUI(app) {
 
   function kmFiles(offset) {
     if (!ui.km || !app.getHeritage()) return [];
-    const L = S(), stems = ["samiske", "steinalder", "nyere_tid", "annet_udatert"], keys = ["sami", "stone", "modern", "other"];
-    return [0, 1, 2, 3].filter((c) => ui.kmCats[c]).map((c, j) => ({
-      cat: c, colour: KM_COLOURS[c], label: L.ex_lab_km(L[`km_${keys[c]}`]),
+    const L = S(), stems = ["samiske", "steinalder_tidlig_metalltid", "jernalder_middelalder", "nyere_tid", "annet_udatert"];
+    return KM_CATS.map((_, c) => c).filter((c) => ui.kmCats[c]).map((c, j) => ({
+      cat: c, colour: KM_COLOURS[c], label: L.ex_lab_km(L[`km_${KM_CATS[c]}`]),
       file: `${String(offset + j + 1).padStart(2, "0")}_kulturminner_${stems[c]}.png`,
     }));
   }
@@ -140,6 +141,7 @@ export function initExportUI(app) {
     if (app.getHeritage()) {
       $("ex-km").addEventListener("change", (e) => { ui.km = e.target.checked; $("ex-km-cats").classList.toggle("hidden", !ui.km); renderLayers(); });
       for (const cb of panel.querySelectorAll("[data-exkm]")) cb.addEventListener("change", (e) => { ui.kmCats[Number(e.target.dataset.exkm)] = e.target.checked; renderLayers(); });
+      $("ex-kmpolys").addEventListener("change", (e) => { ui.kmPolys = e.target.checked; });
       $("ex-kmsize").addEventListener("input", (e) => { ui.kmSize = Number(e.target.value); $("ex-kmsize-o").textContent = `${ui.kmSize} px`; });
     }
     $("ex-fill").addEventListener("input", (e) => { ui.fill = Number(e.target.value); $("ex-fill-o").textContent = `${Math.round(ui.fill * 100)} %`; });
@@ -243,7 +245,7 @@ export function initExportUI(app) {
         fillAlpha: ui.fill, outlinePx: ui.outline, background: ui.background, useLake2: ui.useLake2,
         exag: ui.mode === "map" ? 1 : state().exag, baseState: { ...state() }, lang: state().lang,
         baseTextures: app.baseTex, viewCode: viewCode(), L,
-        km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize } : null,
+        km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize, polys: ui.kmPolys } : null,
       }, (msg) => { prog.textContent = msg; });
       const a = document.createElement("a");
       const day = new Date().toISOString().slice(0, 10);

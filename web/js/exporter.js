@@ -59,8 +59,8 @@ export class PosterExporter {
    */
   constructor(app) { this.app = app; }
 
-  /** Render the scene in tiles into a W x H canvas, cropped to `crop` of the viewport. */
-  renderToCanvas(camera, W, H, crop, clear, pad = 0) {
+  /** Render the scene in tiles into a W x H canvas, cropped to `crop` of the viewport (onTile(w, h) before each tile). */
+  renderToCanvas(camera, W, H, crop, clear, pad = 0, onTile = null) {
     const { renderer, scene } = this.app;
     const s = W / crop.w;
     const fullW = crop.vw * s, fullH = crop.vh * s;
@@ -76,11 +76,16 @@ export class PosterExporter {
       rt.setSize(rw, rh);
       camera.setViewOffset(fullW, fullH, crop.x * s + tx - pad, crop.y * s + ty - pad, rw, rh);
       camera.updateProjectionMatrix();
+      onTile?.(rw, rh);
       renderer.setRenderTarget(rt);
       renderer.setClearColor(clear.color, clear.alpha);
       renderer.clear(true, true, true);
       renderer.render(scene, camera);
       renderer.readRenderTargetPixels(rt, 0, 0, rw, rh, buf);
+      if (clear.unpremultiply) for (let i = 0; i < buf.length; i += 4) {
+        const a = buf[i + 3];
+        if (a > 0 && a < 255) { const k = 255 / a; buf[i] = Math.min(255, buf[i] * k); buf[i + 1] = Math.min(255, buf[i + 1] * k); buf[i + 2] = Math.min(255, buf[i + 2] * k); }
+      }
       const img = octx.createImageData(tw, th);
       for (let r = 0; r < th; r++) {
         const srcRow = rh - 1 - (r + pad);   // GL rows are bottom-up
@@ -121,6 +126,14 @@ export class PosterExporter {
     x0 = Math.max(-halfW, x0 - mx); x1 = Math.min(halfW, x1 + mx); y0 = Math.max(-halfH, y0 - my); y1 = Math.min(halfH, y1 + my);
     const [ux0, uy0] = lake.toUtm(x0, y0), [ux1, uy1] = lake.toUtm(x1, y1);
     return [ux0, uy0, ux1, uy1];
+  }
+
+  /** Approximate ground size of one output pixel at the centre of a perspective crop. */
+  metresPerPx(camera, opts) {
+    const ray = new THREE.Raycaster(), hit = new THREE.Vector3(), c = opts.crop;
+    ray.setFromCamera(new THREE.Vector2(((c.x + c.w / 2) / c.vw) * 2 - 1, -((c.y + c.h / 2) / c.vh) * 2 + 1), camera);
+    const d = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), hit) ? hit.distanceTo(camera.position) : 20000;
+    return 2 * d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / (c.vh * opts.W / c.w);
   }
 
   /** Extent (EPSG:25833) of the crop for an orthographic, north-up camera. */
@@ -246,27 +259,38 @@ export class PosterExporter {
       // ---------------------------------------------------------------- cultural heritage sites
       const km = opts.km;
       if (km?.heritage && km.files.length) {
-        const Hg = km.heritage, prevOn = [...(Hg.on ?? [true, true, true, false])], prevSize = Hg.material.uniforms.uSize.value;
+        const Hg = km.heritage, prevOn = [...Hg.on], prevSize = Hg.material.uniforms.uSize.value;
         const gl = this.app.renderer.getContext();
         const maxPt = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)?.[1] ?? 64;
         const size = Math.min(km.size, maxPt);
         lake.update({ ...opts.baseState, t: T_NOW, regulated: false, frame: 0, overlay: 0, iso: false, exag: opts.exag });
         lake.water.visible = false; lake.terrain.visible = true; lake.terrainMat.colorWrite = false;
-        Hg.points.visible = true;
-        Hg.setSize(size);
+        Hg.points.visible = true; Hg.polygons.visible = !!km.polys;
+        Hg.setSize(size); Hg.setPremultiplied(true);
+        // outlines scale with the marker size; safety-zone dashes from the output pixel size
+        const lineScale = size / 10;
+        Hg.setScale(bbox ? (bbox[2] - bbox[0]) / opts.W : this.metresPerPx(cam, opts));
+        const cats = Hg.on.map((_, c) => c);
         try {
           for (const f of km.files) {
             progress?.(`${opts.L.ex_km}: ${f.label}`);
             await new Promise((r) => setTimeout(r, 0));
-            Hg.setCategories([0, 1, 2, 3].map((c) => c === f.cat));
-            const cv = this.renderToCanvas(cam, opts.W, opts.H, opts.crop, { color: 0x000000, alpha: 0 }, Math.ceil(size / 2) + 2);
+            Hg.setCategories(cats.map((c) => c === f.cat));
+            const cv = this.renderToCanvas(cam, opts.W, opts.H, opts.crop, { color: 0x000000, alpha: 0, unpremultiply: true }, Math.ceil(size / 2) + 2,
+              (w, h) => Hg.setViewport(w, h, lineScale));
             files.push({ name: f.file, data: await blobBytes(await canvasBlob(cv, "image/png")) });
             if (isMap) files.push(...this.worldFiles(f.file, bbox, opts.W, opts.H, "pgw"));
             pctx.drawImage(cv, 0, 0, preview.width, preview.height);
           }
-          files.push({ name: "kulturminner.geojson", data: Hg.geojson([0, 1, 2, 3].map((c) => km.files.some((f) => f.cat === c))) });
+          const on = cats.map((c) => km.files.some((f) => f.cat === c));
+          files.push({ name: "kulturminner.geojson", data: Hg.geojson(on) });
+          if (km.polys) {
+            files.push({ name: "kulturminner_lokaliteter.geojson", data: Hg.geojson(on, "polygons") });
+            files.push({ name: "kulturminner_sikringssoner.geojson", data: Hg.geojson(on, "zones") });
+          }
         } finally {
-          Hg.setCategories(prevOn); Hg.setSize(prevSize);
+          Hg.setCategories(prevOn); Hg.setSize(prevSize); Hg.setPremultiplied(false);
+          Hg.setViewport(this.app.renderer.domElement.clientWidth, this.app.renderer.domElement.clientHeight);
         }
         if (size < km.size) km.note = `marker size limited to ${size} px by the GPU`;
       }
@@ -295,7 +319,8 @@ export class PosterExporter {
 
   legendSvg(opts) {
     const kmRows = opts.km?.files ?? [];
-    const rowH = 34, w = 640, h = 44 + rowH * (opts.layers.length + kmRows.length) + 30;
+    const polyRow = kmRows.length && opts.km.polys ? 1 : 0;
+    const rowH = 34, w = 640, h = 44 + rowH * (opts.layers.length + kmRows.length + polyRow) + 30;
     const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const rows = opts.layers.map((Ly, i) => {
       const y = 44 + i * rowH;
@@ -307,11 +332,17 @@ export class PosterExporter {
       const shape = [
         `<circle cx="${cx}" cy="${cy}" r="9"/>`,
         `<polygon points="${cx},${cy - 10} ${cx + 10},${cy + 8} ${cx - 10},${cy + 8}"/>`,
+        `<polygon points="${cx - 10},${cy} ${cx - 5},${cy - 8.7} ${cx + 5},${cy - 8.7} ${cx + 10},${cy} ${cx + 5},${cy + 8.7} ${cx - 5},${cy + 8.7}"/>`,
         `<rect x="${cx - 8}" y="${cy - 8}" width="16" height="16"/>`,
         `<polygon points="${cx},${cy - 10} ${cx + 10},${cy} ${cx},${cy + 10} ${cx - 10},${cy}"/>`,
       ][f.cat];
       return `<g fill="${col}" stroke="#ffffff" stroke-width="2">${shape}</g><text x="72" y="${y + 16}" font-size="15">${esc(f.label)}</text>`;
-    }).join("\n");
+    }).join("\n") + (polyRow ? (() => {
+      const y = 44 + (opts.layers.length + kmRows.length) * rowH;
+      return `\n<rect x="17" y="${y + 1}" width="42" height="20" fill="#888" fill-opacity="0.35" stroke="#555" stroke-width="2"/>`
+        + `<rect x="13" y="${y - 3}" width="50" height="28" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4 3"/>`
+        + `<text x="72" y="${y + 16}" font-size="15">${esc(opts.L.ex_km_polys_legend)}</text>`;
+    })() : "");
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="Segoe UI, Helvetica, Arial, sans-serif">
 <rect width="100%" height="100%" fill="#ffffff"/>
 <text x="16" y="28" font-size="18" font-weight="600">${esc(opts.L.ex_legend_title)}</text>
@@ -335,8 +366,10 @@ ${rows}
       ...(opts.background !== "none" ? [`  00  background: ${opts.background === "ortho" ? "aerial photo of today (Norge i bilder)" : opts.background}`] : []),
       ...opts.layers.map((Ly) => `  ${Ly.file}  ${Ly.label}  [${Ly.color}]`),
       ...(opts.km?.files ?? []).map((f) => `  ${f.file}  ${f.label}  [${f.colour}]`),
-      ...(opts.km?.files?.length ? ["  kulturminner.geojson  heritage sites as points (EPSG:25833) with category, type, dating, protection and Kulturminnesøk link",
-        `  Heritage marker size ${opts.km.size} px${opts.km.note ? ` (${opts.km.note})` : ""}. Categories: Sami = KML §4.2 / Sami Iron Age / Sami monument type; Stone Age = Stone Age dating; modern = after 1537; other = metal ages, Middle Ages, undated.`] : []),
+      ...(opts.km?.files?.length ? ["  kulturminner.geojson  heritage sites as points (EPSG:25833) with ID, category, type, dating, protection and Kulturminnesøk link",
+        ...(opts.km.polys ? ["  kulturminner_lokaliteter.geojson / kulturminner_sikringssoner.geojson  site outlines and safety zones (EPSG:25833)",
+          "  The heritage PNGs include the site outlines (solid, translucent fill) and safety zones (dashed) under the markers."] : []),
+        `  Heritage marker size ${opts.km.size} px${opts.km.note ? ` (${opts.km.note})` : ""}. Categories: Sami = KML §4.2 / Sami Iron Age / Sami monument type; Stone Age & Early Metal Age; Iron Age & Middle Ages; modern = after 1537; other = older than 100 years, uncertain or undated.`] : []),
       "",
       `Water style: fill opacity ${Math.round(opts.fillAlpha * 100)} %, outline ${opts.outlinePx} px (inside the shoreline). Leinavatnet ${opts.useLake2 ? "included" : "excluded"}.`,
       "All images share the same camera, crop and pixel size, so they register exactly when stacked.",
@@ -348,7 +381,7 @@ ${rows}
       "  Aerial photo: © Norge i bilder (Kartverket, Geovekst og kommunene). Check the Norge i bilder terms before printing or publishing.",
       "  Terrain: Kartverket DTM (CC BY 4.0). Lake depth data and outlines: NVE (non-commercial use, not for navigation).",
       "  Land uplift: NKG2016LU. Reconstruction and model: https://github.com/ErikKjellis/lake-tilt",
-      ...(opts.km?.files?.length ? ["  Cultural heritage sites: Riksantikvaren, Kulturminner - Lokaliteter (open data, NLOD); see kulturminnesok.no."] : []),
+      ...(opts.km?.files?.length ? ["  Cultural heritage sites: Riksantikvaren, Kulturminner - Lokaliteter, Enkeltminner og Sikringssoner (open data, NLOD); see kulturminnesok.no."] : []),
       `  ${L.ex_caveat}`,
     ];
     void formatYear; void meta;

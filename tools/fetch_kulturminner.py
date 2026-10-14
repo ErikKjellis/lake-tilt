@@ -1,18 +1,23 @@
-"""Cultural heritage sites (kulturminner) for the render area, in three categories.
+"""Cultural heritage sites (kulturminner) for the render area: points, locality polygons and safety zones.
 
 Source: Riksantikvaren, "Kulturminner - Lokaliteter, Enkeltminner og Sikringssoner"
-        (WFS https://wfs.geonorge.no/skwms1/wfs.kulturminner, open data, credit Riksantikvaren).
+        (WFS https://wfs.geonorge.no/skwms1/wfs.kulturminner, open data (NLOD), credit Riksantikvaren).
 Code lists: https://register.geonorge.no/sosi-kodelister/kulturminner
 
-Each site (lokalitet) is classified from the site and its individual monuments:
+Each site (lokalitet) is classified from the site and its individual monuments, in this order:
   sami    - protected as Sami heritage (KML §4 second paragraph: "Samisk kulturminne fra år 1917 eller eldre"),
-            dated "Samisk jernalder", or (when not Stone Age dated) with a monument type diagnostic of
-            Sami culture (árran, gamme, sieidi/offering site, reindeer fence, meat cache, bow-hunting stand ...)
-  stone   - dated to the Stone Age (steinalder, eldre/yngre steinalder, senneolitikum, sein steinbrukende tid,
-            steinalder - bronsealder, senneolitikum - bronsealder)
-  modern  - dated after the Reformation (1537 or later)
-  other   - everything else (metal ages, Middle Ages, "pre-Reformation", "older than 100 years", undated)
-Sites removed from the record (vernetype FJE) are skipped.
+            dated "Samisk jernalder", or (when not Stone Age / Early Metal Age dated) with a monument type
+            diagnostic of Sami culture (árran, gamme, sieidi/offering site, reindeer fence, meat cache,
+            bow-hunting stand ...)
+  stone   - Stone Age and Early Metal Age: steinalder (all subdivisions), sein steinbrukende tid,
+            tidlig metalltid, bronsealder, steinalder - bronsealder, senneolitikum - bronsealder,
+            bronsealder - jernalder
+  iron    - Iron Age and Middle Ages: jernalder (all subdivisions), middelalder (all subdivisions),
+            jernalder - middelalder, yngre jernalder - middelalder, vikingtid - middelalder
+  modern  - all datings after the Reformation (1537 or later)
+  other   - everything else ("førreformatorisk tid", "eldre enn 100 år", uviss tid, undated)
+Sites removed from the record (vernetype FJE) are skipped. Safety zones (sikringssoner) are linked to
+their site through the number before the dash in kulturminneId.
 
 Usage: python tools/fetch_kulturminner.py [tools/scene_config.json]
 Writes data/raw/kulturminner/*.gml and web/data/<lake>/kulturminner.json
@@ -28,6 +33,8 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+import shapely
+from shapely.geometry import Polygon, MultiPolygon
 
 ROOT = Path(__file__).resolve().parents[1]
 WFS = "https://wfs.geonorge.no/skwms1/wfs.kulturminner"
@@ -35,15 +42,36 @@ REG = "https://register.geonorge.no/api/sosi-kodelister/kulturminner/{}.json"
 NS = {"wfs": "http://www.opengis.net/wfs/2.0", "gml": "http://www.opengis.net/gml/3.2"}
 APP = "{http://skjema.geonorge.no/SOSI/produktspesifikasjon/LokaliteterEnkeltminnerOgSikringssoner/20210217}"
 
-STONE = {20, 21, 22, 23, 60, 70, 71}
+STONE = {20, 21, 22, 23, 30, 31, 32, 60, 61, 70, 71, 72}
+IRON = {40, 41, 42, 43, 44, 45, 46, 47, 50, 51, 52, 53, 73, 74, 75}
 SAMI_DATES = {62}
-# monument types that are diagnostic of Sami culture (used when the site is not Stone Age dated)
+# monument types that are diagnostic of Sami culture (used when the site is not Stone Age / Early Metal Age dated)
 SAMI_TYPES = {"Arran", "Gammetuft", "Gamme", "Hellig sted", "Hellig fjell", "Offersted", "Offerstein", "Sieidi",
               "Gieddi-reingjerde", "Reingjerde", "Kjøttgjemme", "Bogastelle", "Stalotuft", "Goahti"}
+CATEGORIES = {
+    "sami": "Sami heritage (KML §4.2, Sami Iron Age, or Sami monument type)",
+    "stone": "Stone Age and Early Metal Age",
+    "iron": "Iron Age and Middle Ages",
+    "modern": "Modern (after 1537)",
+    "other": "Other / undated",
+}
 
 
 def is_modern(code: int) -> bool:
     return 100 <= code <= 201 and code not in (195, 196)
+
+
+def classify(codes, sami, sami_type):
+    cs = set(codes)
+    if sami or (sami_type and not (STONE & cs)):
+        return "sami"
+    if STONE & cs:
+        return "stone"
+    if IRON & cs:
+        return "iron"
+    if codes and all(is_modern(c) for c in codes):
+        return "modern"
+    return "other"
 
 
 def fetch(url: str, path: Path):
@@ -64,22 +92,35 @@ def text(el, path):
     return e.text.strip() if e is not None and e.text else None
 
 
-def centroid(el):
-    """Area-weighted centroid of the first polygon (posList, EPSG:25833)."""
-    pos = el.find(f"{APP}område//gml:exterior//gml:posList", NS)
-    if pos is None:
-        pos = el.find(".//gml:posList", NS)
-    if pos is None:
-        p = el.find(".//gml:pos", NS)
-        x, y = map(float, p.text.split()[:2])
-        return x, y
-    v = np.array(pos.text.split(), float).reshape(-1, 2)
-    x, y = v[:, 0], v[:, 1]
-    a = x[:-1] * y[1:] - x[1:] * y[:-1]
-    A = a.sum() / 2
-    if abs(A) < 1e-6:
-        return float(x.mean()), float(y.mean())
-    return float(((x[:-1] + x[1:]) * a).sum() / (6 * A)), float(((y[:-1] + y[1:]) * a).sum() / (6 * A))
+def ring(poslist):
+    return np.array(poslist.text.split(), float).reshape(-1, 2)
+
+
+def geometry(el):
+    """All polygons under 'område' as a shapely (Multi)Polygon in EPSG:25833."""
+    polys = []
+    for pg in el.find(f"{APP}område").iter("{http://www.opengis.net/gml/3.2}Polygon"):
+        ext = pg.find("gml:exterior//gml:posList", NS)
+        if ext is None:
+            continue
+        holes = [ring(h) for h in pg.findall("gml:interior//gml:posList", NS)]
+        p = Polygon(ring(ext), holes)
+        polys.append(p if p.is_valid else p.buffer(0))
+    if not polys:
+        return None
+    return polys[0] if len(polys) == 1 else MultiPolygon([q for p in polys for q in getattr(p, "geoms", [p])])
+
+
+def rings_of(geom, tol=0.3):
+    """Simplified rings as [[[x, y], ...], ...] (exterior first, then holes) per polygon, 0.1 m precision."""
+    g = shapely.simplify(geom, tol, preserve_topology=True)
+    out = []
+    for p in getattr(g, "geoms", [g]):
+        if p.is_empty:
+            continue
+        rs = [p.exterior] + list(p.interiors)
+        out.append([np.round(np.asarray(r.coords)[:-1, :2], 1).tolist() for r in rs])
+    return out
 
 
 def main():
@@ -88,7 +129,7 @@ def main():
     raw = ROOT / "data" / "raw" / "kulturminner"
     (raw / "codes").mkdir(parents=True, exist_ok=True)
     gml = {}
-    for T in ("Lokalitet", "Enkeltminne"):
+    for T in ("Lokalitet", "Enkeltminne", "Sikringssone"):
         q = {"service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": f"app:{T}",
              "srsName": "urn:ogc:def:crs:EPSG::25833", "bbox": f"{x0},{y0},{x1},{y1},urn:ogc:def:crs:EPSG::25833", "count": 20000}
         gml[T] = fetch(WFS + "?" + urllib.parse.urlencode(q), raw / f"{T}.gml")
@@ -119,43 +160,55 @@ def main():
         ms = mons.get(lid, [])
         codes = sorted({c for mm in ms for c in mm["dating"]})
         sami = para.startswith("4.2") or any(mm["sami"] for mm in ms) or bool(SAMI_DATES & set(codes))
-        sami_type = any(mm["art"] in SAMI_TYPES for mm in ms) and not (STONE & set(codes))
-        if sami or sami_type:
-            cat = "sami"
-        elif STONE & set(codes):
-            cat = "stone"
-        elif codes and all(is_modern(c) for c in codes):
-            cat = "modern"
-        else:
-            cat = "other"
-        x, y = centroid(e)
+        sami_type = any(mm["art"] in SAMI_TYPES for mm in ms)
+        geom = geometry(e)
+        if geom is None:
+            continue
+        c = geom.representative_point() if not geom.centroid.within(geom) else geom.centroid
+        x, y = c.x, c.y
         if not (x0 <= x <= x1 and y0 <= y <= y1):
             continue
         art = text(e, f"{APP}lokalitetsart")
         info = text(e, f"{APP}informasjon") or ""
         sites.append({
-            "id": kid, "x": round(x, 1), "y": round(y, 1), "cat": cat,
+            "id": kid, "lid": lid, "x": round(x, 1), "y": round(y, 1), "cat": classify(codes, sami, sami_type),
             "name": text(e, f"{APP}navn"),
             "art": lart.get(str(int(art)) if art and art.isdigit() else art, art),
             "dating": [dat.get(str(c), str(c)) for c in codes],
-            "monuments": Counter(mm["art"] for mm in ms if mm["art"]).most_common(4),
+            "monuments": Counter(mm["art"] for mm in ms if mm["art"]).most_common(6),
             "n": len(ms) or int(text(e, f"{APP}antallEnkeltminner") or 1),
             "vern": para or vtype,
-            "info": info[:240] + ("…" if len(info) > 240 else ""),
+            "info": info[:400] + ("…" if len(info) > 400 else ""),
             "link": text(e, f"{APP}linkKulturminnesøk"),
+            "poly": rings_of(geom),
+            "area_m2": round(geom.area, 1),
         })
+
+    by_lid = {s["lid"]: s for s in sites}
+    zones, unlinked = [], 0
+    for m in ET.parse(gml["Sikringssone"]).getroot().findall("wfs:member", NS):
+        e = m[0]
+        lid = (text(e, f"{APP}kulturminneId") or "").split("-")[0]
+        site = by_lid.get(lid)
+        if site is None:
+            unlinked += 1           # zone of a removed site or a site outside the area
+            continue
+        geom = geometry(e)
+        if geom is not None:
+            zones.append({"lid": lid, "cat": site["cat"], "poly": rings_of(geom)})
+
     counts = Counter(s["cat"] for s in sites)
     out = ROOT / "web" / "data" / cfg["lake"] / "kulturminner.json"
     out.write_text(json.dumps({
-        "source": "Riksantikvaren – Kulturminner, lokaliteter (WFS wfs.geonorge.no/skwms1/wfs.kulturminner)",
+        "source": "Riksantikvaren – Kulturminner, lokaliteter og sikringssoner (WFS wfs.geonorge.no/skwms1/wfs.kulturminner)",
         "licence": "Open data (Norsk lisens for offentlige data, NLOD); credit Riksantikvaren",
-        "categories": {"sami": "Sami heritage (KML §4.2, Sami Iron Age, or Sami monument type)", "stone": "Stone Age",
-                       "modern": "Modern (after 1537)", "other": "Other / undated"},
-        "counts": counts, "skipped": skipped, "sites": sites,
+        "categories": CATEGORIES, "counts": counts, "skipped": skipped,
+        "sites": sites, "zones": zones,
     }, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"wrote {out.relative_to(ROOT)}: {len(sites)} sites {dict(counts)}; skipped {dict(skipped)}")
+    print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size / 1e6:.2f} MB): {len(sites)} sites {dict(counts)}; "
+          f"{len(zones)} safety zones ({unlinked} not linked); skipped {dict(skipped)}")
     other = Counter(d for s in sites if s["cat"] == "other" for d in (s["dating"] or ["(no dating)"]))
-    print("datings in 'other':", other.most_common(15))
+    print("datings in 'other':", other.most_common(10))
 
 
 if __name__ == "__main__":

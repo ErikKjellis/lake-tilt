@@ -41,14 +41,17 @@ URL options:
 
 ### Cultural heritage sites (kulturminner)
 
-The **Cultural heritage sites** checkbox shows Riksantikvaren's registered sites (558 in the area; 13 marked as removed are left out) as markers draped on the terrain. Hover a marker for its type, dating, monuments and protection status; click to open it in Kulturminnesøk. Each site is classified from the site and its individual monuments (`tools/fetch_kulturminner.py`):
+The **Cultural heritage sites** checkbox shows Riksantikvaren's registered sites (558 in the area; 13 marked as removed are left out) as markers draped on the terrain. Hover a marker for its ID, name and dating; click it for a popup with the type, monuments, protection status, description and a link to Kulturminnesøk (the popup stays until you close it, click the map or press Esc). When zoomed in (view distance under about 8 km), the site outlines (*lokalitet*, solid line with a translucent fill) and safety zones (*sikringssone*, dashed) are drawn as well, and clicking inside an outline opens its popup.
+
+Each site is classified from the site and its individual monuments (`tools/fetch_kulturminner.py`):
 
 | Category | Marker | Rule | Sites |
 |---|---|---|---|
-| Sami | red circle | protected as Sami heritage (KML §4 second paragraph, 1917 or older), dated *Samisk jernalder*, or, when not Stone Age dated, a monument type diagnostic of Sami culture (árran, gamme, offering site/sieidi, reindeer fence, meat cache, bow-hunting stand) | 410 |
-| Stone Age | orange triangle | dated to the Stone Age (incl. *sein steinbrukende tid*, *steinalder – bronsealder*) | 16 |
+| Sami | red circle | protected as Sami heritage (KML §4 second paragraph, 1917 or older), dated *Samisk jernalder*, or, when not Stone Age / Early Metal Age dated, a monument type diagnostic of Sami culture (árran, gamme, offering site/sieidi, reindeer fence, meat cache, bow-hunting stand) | 408 |
+| Stone Age & Early Metal Age | orange triangle | Stone Age, *sein steinbrukende tid*, *tidlig metalltid*, Bronze Age and the ranges *steinalder – bronsealder*, *bronsealder – jernalder* | 56 |
+| Iron Age & Middle Ages | teal hexagon | Iron Age (incl. Viking Age), Middle Ages and *jernalder – middelalder* | 15 |
 | Modern | violet square | all datings after the Reformation (1537 or later) | 15 |
-| Other / undated | grey diamond (off by default) | metal ages, Middle Ages, *eldre enn 100 år*, undated (mostly hearths and pitfall traps) | 117 |
+| Other / undated | grey diamond (off by default) | *eldre enn 100 år*, *uviss tid*, *førreformatorisk tid* or undated (mostly pitfall traps and hearths) | 64 |
 
 The shapes differ as well as the colours, so the categories stay distinct in black-and-white print. Data: Riksantikvaren, *Kulturminner – Lokaliteter, Enkeltminner og Sikringssoner* (open data, WFS `wfs.geonorge.no/skwms1/wfs.kulturminner`). Update with `python tools/fetch_kulturminner.py`.
 
@@ -59,7 +62,7 @@ The shapes differ as well as the colours, so the categories stay distinct in bla
 - **View:** *3D view* uses the current camera; mountains in front hide the water, as on screen. *Map (top-down)* switches to an orthographic, north-up view (UTM 33 grid north), so you can pan and zoom to frame the poster.
 - **Format and size:** A-series landscape or portrait, square, 16:9 or the whole screen, and 3000–10000 px on the long side. The panel shows the print size at 300 dpi, and a dashed frame shows what will be exported.
 - **Layers:** past water levels (cal BP, comma-separated), plus today's natural level and today's reservoir at its lowest (LRV 472.8 m) and highest (HRV 489.0 m) levels. Each layer is a transparent PNG with its own colour, fill opacity and shoreline outline. Leinavatnet can be included or left out.
-- **Cultural heritage sites:** one transparent PNG per selected category (marker size in pixels), plus `kulturminner.geojson` with all exported sites as points (EPSG:25833).
+- **Cultural heritage sites:** one transparent PNG per selected category (marker size in pixels; optionally with the site outlines and safety zones under the markers), plus `kulturminner.geojson` (points), `kulturminner_lokaliteter.geojson` (outlines) and `kulturminner_sikringssoner.geojson` (safety zones), all EPSG:25833.
 - **Background:** today's aerial photo from Norge i bilder (online). Areas without coverage (Sweden) are filled with the natural-relief map. Alternatively the relief or the topographic map.
 - **Output:** one ZIP with `00_background_*.jpg`, `01_water_*.png` …, `preview_all_layers.jpg`, `legend.svg` and `info.txt`. The info file lists the layers, model parameters, credits and a *view code* that restores the exact viewpoint. In map mode every image also gets a world file (`.pgw`/`.jgw`) and `.prj` (EPSG:25833), so it opens georeferenced in QGIS or ArcGIS.
 
