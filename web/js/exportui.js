@@ -27,6 +27,7 @@ export function initExportUI(app) {
   frame.id = "export-frame"; frame.className = "hidden";
   document.getElementById("app").append(frame, panel);
 
+  let busy = false;   // an export is running: no second run, and the panel stays open
   function render() {
     const L = S();
     panel.innerHTML = `
@@ -78,7 +79,7 @@ export function initExportUI(app) {
         <textarea id="ex-code" rows="3" spellcheck="false"></textarea>
         <div class="ex-btns"><button id="ex-copy">${L.ex_copy}</button><button id="ex-apply">${L.ex_apply}</button></div>
       </details>
-      <div class="ex-btns"><button class="primary" id="ex-run">${L.ex_export}</button></div>
+      <div class="ex-btns"><button class="primary" id="ex-run" ${busy ? "disabled" : ""}>${L.ex_export}</button></div>
       <p class="fine" id="ex-progress" role="status" aria-live="polite"></p>`;
     bind();
     renderLayers();
@@ -227,39 +228,43 @@ export function initExportUI(app) {
   }
 
   async function run() {
+    if (busy) return;
     const L = S();
-    const btn = $("ex-run"), prog = $("ex-progress");
+    const prog = $("ex-progress");
     const lys = layers();
     const kmf = kmFiles(lys.length);
     if (!lys.length && !kmf.length) { prog.textContent = L.ex_nolayers; return; }
-    btn.disabled = true;
+    busy = true; $("ex-run").disabled = true;
+    // the live camera decides the mode (it can be switched outside the panel)
+    const mode = app.isMapView() ? "map" : "persp";
     const { W, H } = outSize();
     const c = crop();
     try {
       if (ui.background === "topo") await ensureTexture("topo");
-      if (ui.background === "ortho" && ui.mode !== "map") { prog.textContent = L.ex_p_background; await ensureTexture("ortho"); }
+      if (ui.background === "ortho" && mode !== "map") { prog.textContent = L.ex_p_background; await ensureTexture("ortho"); }
       app.setExporting(true);
       const blob = await exporter.run({
-        camera: app.getCamera(), mode: ui.mode, W, H, crop: c,
+        camera: app.getCamera(), mode, W, H, crop: c,
         layers: lys.map((Ly) => ({ ...Ly, color: Ly.colour })),
         fillAlpha: ui.fill, outlinePx: ui.outline, background: ui.background, useLake2: ui.useLake2,
-        exag: ui.mode === "map" ? 1 : state().exag, baseState: { ...state() }, lang: state().lang,
+        exag: mode === "map" ? 1 : state().exag, baseState: { ...state() }, lang: state().lang,
         baseTextures: app.baseTex, viewCode: viewCode(), L,
         km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize, polys: ui.kmPolys } : null,
-      }, (msg) => { prog.textContent = msg; });
+      }, (msg) => { $("ex-progress").textContent = msg; });
       const a = document.createElement("a");
       const day = new Date().toISOString().slice(0, 10);
-      a.download = `altevatnet_poster_${ui.mode}_${day}.zip`;
+      a.download = `altevatnet_poster_${mode}_${day}.zip`;
       a.href = URL.createObjectURL(blob);
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-      prog.textContent = L.ex_done((blob.size / 1e6).toFixed(1));
+      $("ex-progress").textContent = L.ex_done((blob.size / 1e6).toFixed(1));
     } catch (e) {
       console.error(e);
-      prog.textContent = `${L.ex_failed} ${e.message ?? e}`;
+      $("ex-progress").textContent = `${L.ex_failed} ${e.message ?? e}`;
     } finally {
+      busy = false;
       app.setExporting(false);
-      btn.disabled = false;
+      if ($("ex-run")) $("ex-run").disabled = false;   // the panel may have been re-rendered (language change)
     }
   }
 
@@ -275,10 +280,11 @@ export function initExportUI(app) {
     layoutFrame();
   }
   function close() {
+    if (busy) return;
     ui.open = false;
     panel.classList.add("hidden"); frame.classList.add("hidden");
     document.getElementById("app").classList.remove("exporting");
   }
   void THREE; void T_NOW;
-  return { open, close, layoutFrame, rerender: () => ui.open && render(), isOpen: () => ui.open };
+  return { open, close, layoutFrame, rerender: () => ui.open && render(), isOpen: () => ui.open, isBusy: () => busy };
 }

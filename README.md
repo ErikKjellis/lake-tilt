@@ -25,13 +25,25 @@ URL options:
 - `?q=low` — 80 m mesh for weak GPUs
 - `?q=high` — force the 40 m mesh
 
+## Getting around
+
+On the first visit a short guide, *How to use the map*, explains the controls step by step. Tick *Don't show this again* to skip it next time. The **?** button next to the language switch (or the `?` key) opens a help panel with the gestures, the keyboard shortcuts and a button to show the guide again. `?guide=1` in the URL always shows the guide; `?guide=0` never does.
+
+| | Mouse | Touch |
+|---|---|---|
+| Turn and tilt the view | Left-drag | One finger |
+| Move | Right-drag, or Shift + left-drag | Two fingers |
+| Zoom (towards the pointer) | Scroll wheel | Pinch |
+
+**3D / Map (from above)** at the top of the View panel switches between the 3D view and a north-up map seen from straight above (drag to move, scroll to zoom; it cannot be rotated). **⌂** flies back to the starting view.
+
 ## What you see
 
 | Control | Meaning |
 |---|---|
 | Time slider / ▶ | From deglaciation (≈ 10 300 cal BP) to 3000 CE. Event ticks mark outlet switches, merging lakes, the dam and so on. |
 | *Land fixed · water tilts* | Today's terrain. The palaeo-water surface is drawn tilted, as it would appear against today's landscape. |
-| *Water level · land tilts* | The water is level, as it was at the time, and the land is deformed back in time. |
+| *Water flat · land tilts* | The water is level, as it was at the time, and the land is deformed back in time. |
 | Palaeo-shorelines | Where the water surface stood every 1000 yr, drawn on today's terrain. They crowd together at the outlet and fan out towards the SE. |
 | Overlay | Uplift since the chosen time relative to the outlet, or today's NKG2016LU uplift rate. |
 | Model parameters | Relaxation time τ, a scale on the uplift gradient, and the deglaciation age. Use these to explore the uncertainty. |
@@ -68,18 +80,23 @@ The shapes differ as well as the colours, so the categories stay distinct in bla
 
 All images share the same camera, crop and pixel size, so they line up exactly when stacked. Past water levels are model results; the aerial photo is © Norge i bilder (check its terms before printing).
 
-### Keyboard (presenting)
+### Keyboard
 
 | Key | Action |
 |---|---|
 | Space | Play / pause |
 | ← / → | Step time 100 yr (Shift: 1000 yr) |
+| M | 3D view / map from above |
+| R | Back to the starting view |
+| ? (or H) | Help |
 | 1–8 | Jump to a tour step |
 | PageDown / PageUp / Enter (during the tour) | Next / previous step; this works with presentation clickers |
 | P | Presentation mode: larger type, fewer controls |
 | L | Switch language (remembered between visits) |
 | F | Full screen |
-| Esc | Close the dialog or end the tour |
+| Esc | Close the help, dialog, guide or popup, or end the tour |
+
+Shortcuts are ignored while you type in a text field or a drop-down menu has the focus, and while the *About the model* dialog is open.
 
 ## The model in brief
 

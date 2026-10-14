@@ -112,9 +112,11 @@ void main() {
     float du = uOvSign * vDr * uF / 1000.0;
     vec3 oc = diverge(du >= 0.0 ? du / max(uOvRange.y, 1e-3) : du / max(-uOvRange.x, 1e-3));
     col = mix(col, oc * (0.55 + 0.45 * shade), 0.48);
+    // no contour lines when there is no uplift to show (today: du = 0 everywhere would draw the zero line everywhere)
+    float lines = step(1e-6, abs(uF));
     float l = gridLine(du / uOvStep, 1.2);
-    col = mix(col, vec3(0.1), 0.55 * l);
-    col = mix(col, vec3(0.0), 0.8 * aaLine(du, 1.6));
+    col = mix(col, vec3(0.1), 0.55 * l * lines);
+    col = mix(col, vec3(0.0), 0.8 * aaLine(du, 1.6) * lines);
   } else if (uOverlay == 2) {
     float r = vDr + uRref;
     vec3 oc = turbo((r - uOvRange.x) / (uOvRange.y - uOvRange.x));

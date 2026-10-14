@@ -26,8 +26,11 @@
         <h1 data-i18n="title">Altevatnet — a tilting lake</h1>
         <p class="sub" data-i18n="subtitle">Post-glacial rebound in Troms, 10 300 years in 3D</p>
       </div>
-      <div class="lang" role="group" aria-label="Language">
-        <button data-lang="en" class="on">EN</button><button data-lang="no">NO</button>
+      <div class="tc-tools">
+        <div class="lang" role="group" aria-label="Language">
+          <button data-lang="en" class="on">EN</button><button data-lang="no">NO</button>
+        </div>
+        <button class="icon help-btn" id="btn-help" type="button" aria-label="Help" aria-haspopup="dialog" aria-expanded="false" title="Help (?)">?</button>
       </div>
     </div>
     <div class="tc-actions">
@@ -53,6 +56,13 @@
 
     <section class="ctl">
       <h2 data-i18n="view_title">View</h2>
+      <div class="cam-row" id="cam-row">
+        <div class="seg" role="group" aria-label="Camera" id="seg-cam">
+          <button type="button" data-cam="persp" class="on" aria-pressed="true" data-i18n="cam_3d">3D</button>
+          <button type="button" data-cam="map" aria-pressed="false" data-i18n="cam_map">Map (from above)</button>
+        </div>
+        <button type="button" class="icon" id="btn-home" aria-label="Reset view" title="Reset view (R)"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M3 9.5 10 3.5l7 6M5 8v8h3.5v-4.5h3V16H15V8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+      </div>
       <div class="seg" role="radiogroup" aria-label="Reference frame" id="seg-frame">
         <button data-frame="0" class="on" data-i18n="frame_land">Land fixed · water tilts</button>
         <button data-frame="1" data-i18n="frame_water">Water level · land tilts</button>
@@ -116,7 +126,7 @@
   <div id="km-pop" class="panel hidden" role="dialog"></div>
 
   <div id="caption" class="panel hidden" role="status" aria-live="polite">
-    <div class="cap-head"><span id="cap-step"></span><h3 id="cap-title"></h3><div class="lang small" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="no">NO</button></div></div>
+    <div class="cap-head"><span id="cap-step"></span><h3 id="cap-title"></h3><div class="lang small" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="no">NO</button></div><button class="icon help-btn small" id="cap-help" type="button" aria-label="Help" aria-haspopup="dialog" aria-expanded="false" title="Help (?)">?</button></div>
     <p id="cap-text"></p>
     <div class="cap-nav">
       <button id="cap-prev" data-i18n="prev">‹ Back</button>
@@ -146,6 +156,10 @@
       <div class="tl-axis" id="tl-axis"></div>
     </div>
   </footer>
+
+  <div id="guide" class="panel hidden" role="dialog" aria-modal="false" aria-labelledby="guide-h"></div>
+  <div id="help" class="panel hidden" role="dialog" aria-modal="false" aria-labelledby="help-h"></div>
+  <div id="guide-live" class="sr-only" aria-live="polite"></div>
 
   <div id="about" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="about-h">
     <div class="modal-body panel">
