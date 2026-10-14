@@ -4,6 +4,15 @@ export const STRINGS = {
     title: "Altevatnet — a tilting lake",
     subtitle: "Post-glacial rebound in Troms, 10 300 years in 3D",
     tour: "Guided tour",
+    lakes_btn: "Choose lake",
+    lk_title: "Choose a lake",
+    lk_intro: "Each lake is a separate 3D scene. Pick one on the map or search the list.",
+    lk_search: "Search by lake, place or county…",
+    lk_current: "shown now",
+    lk_none: "No lake matches the search.",
+    lk_error: "Could not load the list of lakes",
+    lk_missing: (id) => `There is no scene called “${id}”. Choose one of these:`,
+    lk_count: (n, all) => (n === all ? `${all} lakes` : `${n} of ${all} lakes`),
     about: "About the model",
     shot: "Save image",
     ex_btn: "Poster export",
@@ -230,6 +239,15 @@ export const STRINGS = {
     title: "Altevatnet — et vatn som tipper",
     subtitle: "Postglasial landheving i Troms, 10 300 år i 3D",
     tour: "Omvisning",
+    lakes_btn: "Velg innsjø",
+    lk_title: "Velg en innsjø",
+    lk_intro: "Hver innsjø er en egen 3D-scene. Velg på kartet eller søk i lista.",
+    lk_search: "Søk på innsjø, sted eller fylke …",
+    lk_current: "vises nå",
+    lk_none: "Ingen innsjø passer med søket.",
+    lk_error: "Klarte ikke å laste lista over innsjøer",
+    lk_missing: (id) => `Det finnes ingen scene som heter «${id}». Velg en av disse:`,
+    lk_count: (n, all) => (n === all ? `${all} innsjøer` : `${n} av ${all} innsjøer`),
     about: "Om modellen",
     shot: "Lagre bilde",
     ex_btn: "Plakateksport",
@@ -461,5 +479,9 @@ export function applyI18n(lang) {
     const v = S[el.dataset.i18n];
     if (typeof v === "string") el.textContent = v;
   });
-  document.title = lang === "no" ? "Altevatnet som tipper" : "Altevatnet Tilting Lake";
+  document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
+    const v = S[el.dataset.i18nPh];
+    if (typeof v === "string") el.placeholder = v;
+  });
+  document.title = S.doc_title ?? (lang === "no" ? "Altevatnet som tipper" : "Altevatnet Tilting Lake");
 }

@@ -229,6 +229,9 @@ export class LakeScene {
     this.ox = g.x0 + this.width / 2;
     this.oy = g.y1 - this.heightM / 2;
     this.zBase = data.meta.natural_level_m;
+    // colour range of the uplift-rate overlay (mm/yr), rounded outwards to 0.1
+    const rr = data.meta.rate_range ?? [4.0, 5.4];
+    this.rateRange = [Math.floor(rr[0] * 10) / 10, Math.ceil(rr[1] * 10) / 10];
     this.group = new THREE.Group();
     this._buildIntervals();
     this.textures = {};
@@ -475,7 +478,7 @@ export class LakeScene {
       const raw = span / 6, steps = [0.1, 0.2, 0.5, 1, 2, 5, 10];
       tu.uOvStep.value = steps.find((v) => v >= raw) ?? 10;
     } else if (state.overlay === 2) {
-      tu.uOvRange.value.set(4.0, 5.4);
+      tu.uOvRange.value.set(...this.rateRange);
       tu.uOvStep.value = 0.1;
     }
     return F;

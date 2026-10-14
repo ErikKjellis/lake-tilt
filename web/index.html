@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Altevatnet Tilting Lake</title>
-<meta name="description" content="3D visualisation of how Altevatnet in Troms, Norway, has tilted through the Holocene because of post-glacial rebound.">
+<title>Tilting Lakes</title>
+<meta name="description" content="3D visualisation of how Norwegian lakes such as Altevatnet and Tunnsjøen have tilted through the Holocene because of post-glacial rebound.">
 <link rel="stylesheet" href="css/app.css">
 <script type="importmap">
 {
@@ -17,7 +17,7 @@
 </head>
 <body>
 <div id="app">
-  <canvas id="scene" aria-label="3D view of Altevatnet"></canvas>
+  <canvas id="scene" aria-label="3D view of the lake"></canvas>
   <div id="labels"></div>
 
   <header id="titlecard" class="panel">
@@ -34,6 +34,7 @@
       </div>
     </div>
     <div class="tc-actions">
+      <button id="btn-lakes" aria-haspopup="dialog"><span class="ico">⌖</span><span data-i18n="lakes_btn">Choose lake</span></button>
       <button id="btn-tour" class="primary"><span class="ico">▶</span><span data-i18n="tour">Guided tour</span></button>
       <button id="btn-about" data-i18n="about">About the model</button>
       <button id="btn-shot" data-i18n="shot" title="PNG of the 3D view">Save image</button>
@@ -168,9 +169,25 @@
     </div>
   </div>
 
+  <div id="picker" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="lk-h">
+    <div class="modal-body panel lk-body">
+      <button class="icon close" id="lk-close" aria-label="Close">×</button>
+      <h3 id="lk-h" data-i18n="lk_title">Choose a lake</h3>
+      <p class="lk-intro" data-i18n="lk_intro">Each lake is a separate 3D scene. Pick one on the map or search the list.</p>
+      <div class="lk-grid">
+        <svg id="lk-map" role="group" aria-label="Map of Norway with the lakes"></svg>
+        <div class="lk-pane">
+          <input id="lk-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="lk-list" aria-expanded="false" autocomplete="off" data-i18n-ph="lk_search" placeholder="Search by lake, place or county…">
+          <ul id="lk-list" role="listbox" aria-label="Lakes"></ul>
+          <p class="lk-count" id="lk-count"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="loading">
     <div class="ld-box">
-      <div class="ld-title">Altevatnet</div>
+      <div class="ld-title">&nbsp;</div>
       <div class="ld-bar"><div id="ld-fill"></div></div>
       <div class="ld-msg" id="ld-msg">Loading…</div>
     </div>

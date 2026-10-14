@@ -14,6 +14,9 @@ export const T_NOW = 1950 - YEAR_NOW_CE; // -76 (BP)
 export const T_END = 1950 - 3000;        // 3000 CE
 export const T_EPOCH = 1950 - 2000;      // NKG2016LU reference epoch
 
+// Altevatnet's meta.json predates the per-outlet "sea" field
+const LEGACY_SEA = { luspi: "Atlantic", secol: "Baltic" };
+
 export class UpliftModel {
   constructor(meta) {
     this.meta = meta;
@@ -76,6 +79,12 @@ export class UpliftModel {
     return this._cols[id];
   }
 
+  /** The sea an outlet finally drains to ("Atlantic", "Baltic" or undefined). */
+  seaOf(id) {
+    const o = this.meta.outlets.find((x) => x.id === id);
+    return o?.sea ?? LEGACY_SEA[id];
+  }
+
   /** Classify the outlet of the main lake (index 0) at every F grid node. */
   _classify() {
     const outlets = this.meta.outlets;
@@ -85,14 +94,19 @@ export class UpliftModel {
       return "other";
     };
     const L = this.lakes;
+    // an outlet that spills into another tracked lake: follow that lake's spill (Altevatn -> Leinavatn -> ...)
+    const viaLake = (id) => { const o = outlets.find((x) => x.id === id); return o?.via_lake ?? (id === "leina" ? 2 : undefined); };
+    // Altevatnet's extra lake-state events (Leinavatnet merged, W basin cut off)
+    this.legacyLakes = outlets.some((o) => o.id === "leina");
     this.regime = L[0].stats.map((s, i) => {
       const main = near(s);
       const merged = s.merged_with.length > 0;
-      // follow the chain: Altevatn -> Leinavatn -> ...
       let final = main;
-      if (main === "leina" && L.length > 2) final = near(L[2].stats[i]);
-      const leinaMerged = s.merged_with.includes(2);
-      const westSeparate = !s.merged_with.includes(1);
+      for (let hop = 0, li = viaLake(final); hop < 3 && li !== undefined && li < L.length; hop++, li = viaLake(final)) {
+        final = near(L[li].stats[i]);
+      }
+      const leinaMerged = this.legacyLakes && s.merged_with.includes(2);
+      const westSeparate = this.legacyLakes && !s.merged_with.includes(1);
       return { main, final, merged, leinaMerged, westSeparate };
     });
     this.regimeKey = this.regime.map((r) => `${r.final}|${r.leinaMerged}|${r.westSeparate}|${r.main}`);
@@ -110,7 +124,7 @@ export class UpliftModel {
       if (!(t > T_END && t < this.deglac)) continue;
       // going back in time = increasing F; describe the change forward in time (b -> a)
       if (a.final !== b.final) {
-        const kind = { luspi: ["atl", "ev_to_atl"], secol: ["bal", "ev_to_bal"] }[a.final];
+        const kind = { Atlantic: ["atl", "ev_to_atl"], Baltic: ["bal", "ev_to_bal"] }[this.seaOf(a.final)];
         if (kind) ev.push({ t, type: kind[0], key: kind[1], from: b.final, to: a.final });
       }
       if (a.leinaMerged !== b.leinaMerged) ev.push({ t, type: "lake", key: a.leinaMerged ? "ev_merge" : "ev_split" });

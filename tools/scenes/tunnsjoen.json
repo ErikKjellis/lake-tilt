@@ -1,0 +1,396 @@
+{
+  "lake": "tunnsjoen",
+  "name": "Tunnsjøen",
+  "vatnlnr": 696,
+  "dtm": "data/raw/dtm_lt/dtm10_lt",
+  "uplift_grid": "data/processed/tunnsjoen_uplift_rate_grid.json",
+  "cell_dem": 20,
+  "cell_mesh": 20,
+  "render_bbox": [
+    406000,
+    7162000,
+    450000,
+    7202000
+  ],
+  "survey_level_m": 355.0,
+  "survey_datum_to_nn2000_m": 0.0,
+  "natural_level_m": 357.64,
+  "regulated_hrv_m": 357.64,
+  "regulated_lrv_m": 352.64,
+  "reservoir_water_max_m": 358.5,
+  "regulated_polygon_is_water": true,
+  "outlet": {
+    "name": "Natural outlet of Tunnsjøen into Tunnsjøelva (dam site)",
+    "x": 414926,
+    "y": 7175128,
+    "sill_m": 357.64,
+    "plug_radius_m": 180,
+    "note": "Tunnsjøen hoveddam (NVE 2814). The regulation is a drawdown (HRV 357.64 = natural level, LRV 352.64, local datum), so the sill is set to the natural level."
+  },
+  "outlet_channel": [
+    [
+      415060,
+      7175280
+    ],
+    [
+      414930,
+      7175130
+    ],
+    [
+      414850,
+      7175030
+    ],
+    [
+      414770,
+      7174930
+    ]
+  ],
+  "outlet_channel_width_m": 60,
+  "outlet_channel_z": [
+    357.64,
+    357.64,
+    353.0,
+    null
+  ],
+  "F_grid": {
+    "min": -4000,
+    "max": 60000,
+    "step": 250
+  },
+  "lakes": [
+    {
+      "name": "Tunnsjøen",
+      "region": "data/raw/tunnsjoen_omkrets_dybdemalt.geojson"
+    },
+    {
+      "name": "Litl-Tunnsjøen",
+      "region": "data/raw/tunnsjoen_innsjo.geojson",
+      "clip_bbox": [
+        435150,
+        7168000,
+        440000,
+        7174250
+      ]
+    },
+    {
+      "name": "Limingen",
+      "region": "data/raw/limingen_innsjo.geojson"
+    }
+  ],
+  "schematic_lakes": [
+    {
+      "name": "Limingen",
+      "file": "data/raw/limingen_innsjo.geojson",
+      "natural_level_m": 417.7,
+      "max_depth_m": 192,
+      "dams": [
+        {
+          "name": "Limingen dam (natural outlet, Linvasselva)",
+          "x": 441012,
+          "y": 7174482,
+          "radius_m": 200
+        },
+        {
+          "name": "Gjersvika terskel",
+          "x": 425197,
+          "y": 7193370,
+          "radius_m": 100
+        }
+      ]
+    }
+  ],
+  "rate_fit_centre": [
+    428000.0,
+    7182000.0
+  ],
+  "dam": {
+    "name": "Tunnsjøen hoveddam (NVE 2814)",
+    "x": 414926,
+    "y": 7175128,
+    "year": 1943
+  },
+  "se_col": {
+    "name": "Tunnsjøfloan col ≈ 359 m (to Kvarnbergsvattnet / Baltic)",
+    "x": 436190,
+    "y": 7172030
+  },
+  "se_ref": {
+    "x": 435020,
+    "y": 7174030,
+    "note": "E end of Tunnsjøen at the Litl-Tunnsjøen narrows (used for tilt read-outs)"
+  },
+  "outlets": [
+    {
+      "id": "tunnsjoelva",
+      "name": "Tunnsjøelva → Namsen (Atlantic)",
+      "x": 414926,
+      "y": 7175128,
+      "radius_m": 1500,
+      "sea": "Atlantic"
+    },
+    {
+      "id": "narrows",
+      "name": "Narrows into Litl-Tunnsjøen",
+      "x": 435020,
+      "y": 7174030,
+      "radius_m": 900,
+      "via_lake": 1
+    },
+    {
+      "id": "floan",
+      "name": "Tunnsjøfloan col → Tunnsjøbekken → Kvarnbergsvattnet → Ångermanälven (Baltic)",
+      "x": 436190,
+      "y": 7172030,
+      "radius_m": 1500,
+      "sea": "Baltic"
+    }
+  ],
+  "deglaciation": {
+    "best": 10000,
+    "min": 9800,
+    "max": 10400,
+    "se": 10000
+  },
+  "border_admin": [
+    "data/raw/admin/fylke_50_omrade_25833.json"
+  ],
+  "bed_ramp": [
+    [
+      140,
+      [
+        96,
+        118,
+        132
+      ]
+    ],
+    [
+      260,
+      [
+        128,
+        148,
+        152
+      ]
+    ],
+    [
+      357.64,
+      [
+        178,
+        186,
+        176
+      ]
+    ]
+  ],
+  "views": {
+    "overview": {
+      "target": [
+        428000,
+        7180500,
+        0
+      ],
+      "az": 195,
+      "el": 38,
+      "dist": 46000
+    },
+    "col": {
+      "target": [
+        435500,
+        7172800,
+        0
+      ],
+      "az": 230,
+      "el": 32,
+      "dist": 9000
+    }
+  },
+  "places": [
+    {
+      "name": "Tunnsjøen",
+      "x": 425000,
+      "y": 7180500,
+      "kind": "lake",
+      "rank": 1
+    },
+    {
+      "name": "Litl-Tunnsjøen",
+      "x": 435600,
+      "y": 7173000,
+      "kind": "lake",
+      "rank": 2
+    },
+    {
+      "name": "Limingen",
+      "x": 432500,
+      "y": 7186000,
+      "kind": "lake",
+      "rank": 1
+    },
+    {
+      "name": "Tunnsjøelva",
+      "note": "natural outlet → Namsen → Atlantic",
+      "note_no": "naturlig utløp → Namsen → Atlanterhavet",
+      "x": 414926,
+      "y": 7175128,
+      "kind": "outlet",
+      "rank": 1
+    },
+    {
+      "name": "Tunnsjøfloan col ≈ 359 m",
+      "name_no": "Skaret i Tunnsjøfloan ≈ 359 moh.",
+      "note": "watershed: → Kvarnbergsvattnet → Baltic",
+      "note_no": "vannskille: → Kvarnbergsvattnet → Østersjøen",
+      "x": 436190,
+      "y": 7172030,
+      "kind": "col",
+      "rank": 1
+    },
+    {
+      "name": "Linvasselva",
+      "note": "Limingen's natural outlet → Sweden",
+      "note_no": "Limingens naturlige utløp → Sverige",
+      "x": 441012,
+      "y": 7174482,
+      "kind": "outlet",
+      "rank": 2
+    },
+    {
+      "name": "Kvarnbergsvattnet",
+      "note": "Sweden, 311 m",
+      "note_no": "Sverige, 311 moh.",
+      "x": 444500,
+      "y": 7167800,
+      "kind": "lake",
+      "rank": 2
+    },
+    {
+      "name": "Gudfjelløya",
+      "x": 422597,
+      "y": 7179317,
+      "kind": "island",
+      "rank": 3
+    },
+    {
+      "name": "Lille-Fjelløya",
+      "x": 417829,
+      "y": 7176760,
+      "kind": "island",
+      "rank": 3
+    },
+    {
+      "name": "Tunnsjøen (village)",
+      "name_no": "Tunnsjøen (bygd)",
+      "x": 434900,
+      "y": 7174400,
+      "kind": "village",
+      "rank": 3
+    },
+    {
+      "name": "Sweden",
+      "name_no": "Sverige",
+      "x": 446500,
+      "y": 7176000,
+      "kind": "country",
+      "rank": 2
+    }
+  ],
+  "tour": false,
+  "datum_note": "Heights in the local datum of the NVE regulation documents (≈ NN2000 within ~0.5 m, unverified).",
+  "events": [
+    {
+      "t": 7,
+      "type": "hum",
+      "key": "ev_reg1943",
+      "short": "short_reg"
+    },
+    {
+      "t": -3,
+      "type": "hum",
+      "key": "ev_lim1953"
+    }
+  ],
+  "lake_notes": [
+    {
+      "lake": 1,
+      "when_merged": false,
+      "key": "note_litl_separate"
+    }
+  ],
+  "strings": {
+    "en": {
+      "title": "Tunnsjøen — a tilting lake",
+      "subtitle": "Post-glacial rebound in Trøndelag: an outlet that switched seas",
+      "profile_title": "Long profile — outlet (dam) → Tunnsjøen → Litl-Tunnsjøen → Tunnsjøfloan col",
+      "outlet_tunnsjoelva": "Drains W through Tunnsjøelva → Namsen → Atlantic",
+      "outlet_floan": "Model: spills E over the Tunnsjøfloan col (≈ 359 m) → Tunnsjøbekken → Kvarnbergsvattnet → Ångermanälven → Baltic",
+      "outlet_narrows": "Spills into Litl-Tunnsjøen",
+      "outlet_regulated": "Regulated reservoir (drawdown 357.64–352.64 m): the water goes to the Tunnsjø and Tunnsjødal power stations",
+      "outlet_other": "Drainage via another route",
+      "ev_to_atl": "Outlet switches to the W: Tunnsjøen now drains to the Atlantic (Tunnsjøelva → Namsen)",
+      "ev_to_bal": "Outlet switches to the E (model): over the Tunnsjøfloan col towards the Baltic",
+      "short_atl": "→ Atlantic",
+      "short_bal": "→ Baltic",
+      "ev_deglac": "Basin ice-free (≈ 10 000 BP; uncertain, ice-divide area)",
+      "ev_reg1943": "1943: Tunnsjøen regulated (drawdown to 352.64 m)",
+      "short_reg": "regulated",
+      "ev_lim1953": "1953: Limingen regulated; its water is diverted by tunnel to Tunnsjøen",
+      "note_litl_separate": "Litl-Tunnsjøen separate",
+      "prof_today": "today’s natural level 357.64",
+      "prof_hrv": "HRV 357.64",
+      "prof_col": "Tunnsjøfloan col",
+      "prof_outlet": "outlet",
+      "prof_dam": "dam",
+      "prof_frame0": "present-day heights (m a.s.l.)",
+      "ex_lake2": "Include Limingen",
+      "ex_legend_title": "Tunnsjøen — water levels",
+      "ex_lab_natural": "Today, natural level (357.64 m)",
+      "ex_lab_lrv": "Today, reservoir lowest regulated level (LRV 352.64 m)",
+      "ex_lab_hrv": "Today, reservoir highest regulated level (HRV 357.64 m)",
+      "about_html": "<p>This scene shows how <b>Tunnsjøen</b> (Lierne/Røyrvik, Trøndelag) has tilted since the ice sheet melted. The land rises faster towards the east, where the ice was thickest: today the east end of the lake rises about 0.4 mm/yr faster than the outlet in the west.</p>\n<p><b>The finding.</b> South of Litl-Tunnsjøen, the Tunnsjøfloan mire has a natural col only about 1.6 m above today's natural lake level (≈ 359.2 m on the Kartverket DTM). Water crossing it flows down Tunnsjøbekken to Kvarnbergsvattnet in Sweden and on to the Baltic, the same way Limingen drains. That col rises faster than today's outlet (Tunnsjøelva → Namsen → Atlantic), so the model has Tunnsjøen draining <b>east to the Baltic</b> for most of the Holocene and switching to the Atlantic only late. With the default parameters this happens at about 2 700 cal BP.</p>\n<p><b>How firm is that date?</b> Not very. The col is so close to the lake level that ±0.7 m on its height moves the switch by about ±1 000 years. Peat growth in the mire, the local versus NN2000 datum (±0.5 m) and the time constant τ add to the uncertainty. The robust conclusion is the direction: a Baltic outlet for most of the Holocene, then a late turn to the west. Use the model-parameter sliders to explore.</p>\n<p><b>Data.</b> Terrain: Kartverket NHM DTM (CC BY 4.0), including the Swedish side. Bathymetry: NVE's scanned depth map of Tunnsjø (sounded by Olaf Ångaby in 1946 at ≈ 355 m; 20 m contours from 10 m), <b>digitised for this project</b>. The scan was georeferenced by fitting its shoreline to NVE's lake polygon (overlap 0.91). Contour depths were inferred from their nesting and checked against the printed soundings (222 and 207 m). The volume comes out about 12 % below the map's own figure (7.6 against 8.7 km³). Litl-Tunnsjøen and the strip between the 1946 and the regulated shoreline have no soundings and are interpolated. <b>Limingen has no digital bathymetry: its basin is schematic</b>, so its spill levels are right but its depths are not. Land uplift: NKG2016LU. Natural levels: NVE regulation documents (both regulations are drawdowns: Tunnsjøen 357.64 m, Limingen 417.7 m, local datum).</p>\n<p>The uplift model, F(t) and the flood model are the same as for Altevatnet (τ = 5000 yr, calibrated in northern Norway). In Trøndelag the early-Holocene tilt may have been larger.</p>",
+      "doc_title": "Tunnsjøen Tilting Lake",
+      "k_level": "Water level at E end",
+      "rate_text": "Tilting at this time: the E end rises {mm} mm/yr faster than the outlet ({perkm} mm/yr per km)"
+    },
+    "no": {
+      "title": "Tunnsjøen — et vatn som tipper",
+      "subtitle": "Postglasial landheving i Trøndelag: et utløp som byttet hav",
+      "profile_title": "Lengdeprofil — utløp (dam) → Tunnsjøen → Litl-Tunnsjøen → skaret i Tunnsjøfloan",
+      "outlet_tunnsjoelva": "Renner ut i V gjennom Tunnsjøelva → Namsen → Atlanterhavet",
+      "outlet_floan": "Modell: renner over skaret i Tunnsjøfloan (≈ 359 moh.) i Ø → Tunnsjøbekken → Kvarnbergsvattnet → Ångermanälven → Østersjøen",
+      "outlet_narrows": "Renner over i Litl-Tunnsjøen",
+      "outlet_regulated": "Regulert magasin (senkning 357,64–352,64 moh.): vannet går til Tunnsjø og Tunnsjødal kraftverk",
+      "outlet_other": "Avløp via en annen vei",
+      "ev_to_atl": "Utløpet skifter til V: Tunnsjøen renner fra nå av til Atlanterhavet (Tunnsjøelva → Namsen)",
+      "ev_to_bal": "Utløpet skifter til Ø (modell): over skaret i Tunnsjøfloan mot Østersjøen",
+      "short_atl": "→ Atlanterhavet",
+      "short_bal": "→ Østersjøen",
+      "ev_deglac": "Bassenget isfritt (≈ 10 000 BP; usikkert, isskilleområde)",
+      "ev_reg1943": "1943: Tunnsjøen regulert (senket til 352,64 moh.)",
+      "short_reg": "regulert",
+      "ev_lim1953": "1953: Limingen regulert; vannet føres i tunnel til Tunnsjøen",
+      "note_litl_separate": "Litl-Tunnsjøen avsnørt",
+      "prof_today": "dagens naturlige vannstand 357,64",
+      "prof_hrv": "HRV 357,64",
+      "prof_col": "skaret i Tunnsjøfloan",
+      "prof_outlet": "utløp",
+      "prof_dam": "dam",
+      "prof_frame0": "dagens høyder (moh.)",
+      "ex_lake2": "Ta med Limingen",
+      "ex_legend_title": "Tunnsjøen — vannstander",
+      "ex_lab_natural": "I dag, naturlig vannstand (357,64 moh.)",
+      "ex_lab_lrv": "I dag, magasinets laveste regulerte vannstand (LRV 352,64 moh.)",
+      "ex_lab_hrv": "I dag, magasinets høyeste regulerte vannstand (HRV 357,64 moh.)",
+      "about_html": "<p>Denne scenen viser hvordan <b>Tunnsjøen</b> (Lierne/Røyrvik, Trøndelag) har tippet siden innlandsisen smeltet. Landet hever seg raskere mot øst, der isen var tykkest: i dag stiger østenden av vatnet om lag 0,4 mm/år raskere enn utløpet i vest.</p>\n<p><b>Funnet.</b> Sør for Litl-Tunnsjøen har myra Tunnsjøfloan et naturlig skar bare om lag 1,6 m over dagens naturlige vannstand (≈ 359,2 moh. i Kartverkets DTM). Vann som renner over det, går via Tunnsjøbekken til Kvarnbergsvattnet i Sverige og videre til Østersjøen, samme vei som Limingen renner. Skaret hever seg raskere enn dagens utløp (Tunnsjøelva → Namsen → Atlanterhavet), så modellen lar Tunnsjøen renne <b>østover til Østersjøen</b> mesteparten av holocen og først sent skifte til Atlanterhavet. Med standardparametrene skjer det om lag 2 700 kal. BP.</p>\n<p><b>Hvor sikker er dateringen?</b> Ikke særlig. Skaret ligger så nær vannstanden at ±0,7 m på høyden flytter skiftet med om lag ±1 000 år. Torvvekst i myra, lokalt høydesystem mot NN2000 (±0,5 m) og tidskonstanten τ øker usikkerheten. Den robuste konklusjonen er retningen: utløp mot Østersjøen mesteparten av holocen, deretter en sen dreining mot vest. Bruk glidebryterne for modellparametere for å utforske.</p>\n<p><b>Data.</b> Terreng: Kartverkets NHM-DTM (CC BY 4.0), også på svensk side. Dybder: NVEs skannede dybdekart over Tunnsjø (loddet av Olaf Ångaby i 1946 ved ≈ 355 moh.; 20 m-koter fra 10 m), <b>digitalisert i dette prosjektet</b>. Skanningen er georeferert ved å tilpasse strandlinja til NVEs innsjøpolygon (overlapp 0,91). Kotedybdene er utledet av hvordan kotene ligger inni hverandre, og kontrollert mot påtrykte loddskudd (222 og 207 m). Volumet blir om lag 12 % lavere enn kartets eget tall (7,6 mot 8,7 km³). Litl-Tunnsjøen og beltet mellom 1946-strandlinja og regulert strandlinje har ingen lodding og er interpolert. <b>Limingen har ingen digitale dybdedata: bassenget er skjematisk</b>, så overløpsnivåene er riktige, men dybdene er det ikke. Landheving: NKG2016LU. Naturlige vannstander: NVEs reguleringsdokumenter (begge er senkningsreguleringer: Tunnsjøen 357,64 moh., Limingen 417,7 moh., lokalt høydesystem).</p>\n<p>Landhevingsmodellen, F(t) og oversvømmelsesmodellen er de samme som for Altevatnet (τ = 5000 år, kalibrert i Nord-Norge). I Trøndelag kan tippingen tidlig i holocen ha vært større.</p>",
+      "doc_title": "Tunnsjøen som tipper",
+      "k_level": "Vannstand i østenden",
+      "rate_text": "Tipping på dette tidspunktet: østenden stiger {mm} mm/år mer enn utløpet ({perkm} mm/år per km)"
+    }
+  },
+  "profile_z0": 140,
+  "profile_range": [
+    120,
+    420
+  ],
+  "region": {
+    "en": "Lierne/Røyrvik, Trøndelag",
+    "no": "Lierne/Røyrvik, Trøndelag"
+  }
+}

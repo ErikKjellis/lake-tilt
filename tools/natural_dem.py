@@ -24,6 +24,7 @@ from pathlib import Path
 
 import numpy as np
 import shapely
+from scipy import ndimage
 from shapely.geometry import LineString, shape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -63,6 +64,29 @@ def polygon_mask(poly, xc, yc):
     return out
 
 
+def add_schematic_lakes(cfg, z, masks, xc, yc, cell):
+    """Lakes without digital bathymetry that should still hold water: a placeholder bowl below the
+    natural level (depth = min(max_depth * cap, slope * distance to shore + 0.5)) and each dam
+    replaced by a sill plug at the natural level. Spill levels are right; the bottom is not."""
+    for L in cfg.get("schematic_lakes", []):
+        poly = shape(json.loads((ROOT / L["file"]).read_text(encoding="utf-8"))["features"][0]["geometry"])
+        bx0, by0, bx1, by1 = poly.buffer(cell * 4).bounds
+        c0, c1 = max(0, int((bx0 - xc[0]) // cell)), min(xc.size, int((bx1 - xc[0]) // cell) + 1)
+        r0, r1 = max(0, int((yc[0] - by1) // cell)), min(yc.size, int((yc[0] - by0) // cell) + 1)
+        sub = (slice(r0, r1), slice(c0, c1))
+        inside = polygon_mask(poly, xc[c0:c1], yc[r0:r1])
+        dist = ndimage.distance_transform_edt(inside) * cell
+        depth = np.minimum(L["max_depth_m"] * L.get("bowl_cap", 0.6), L.get("bowl_slope", 0.05) * dist + 0.5)
+        zs = z[sub]
+        zs[inside] = np.minimum(zs[inside], L["natural_level_m"] - depth[inside])
+        masks[sub][inside] |= 16
+        X, Y = np.meshgrid(xc[c0:c1], yc[r0:r1])
+        for d in L.get("dams", []):
+            plug = np.hypot(X - d["x"], Y - d["y"]) <= d.get("radius_m", 150)
+            zs[plug] = L["natural_level_m"]
+        print(f"schematic lake {L['file']}: {int(inside.sum())} cells, level {L['natural_level_m']}")
+
+
 def main():
     cfg = load_cfg(sys.argv[1] if len(sys.argv) > 1 else None)
     lake, cell = cfg["lake"], float(cfg["cell_dem"])
@@ -88,6 +112,14 @@ def main():
     gy, gx = np.gradient(z, cell)
     flat = np.hypot(gx, gy) < 0.01
     water = in_reg & flat & (z < cfg["reservoir_water_max_m"])
+    if cfg.get("regulated_polygon_is_water"):
+        # drawdown-only reservoir (HRV = natural level): the polygon is the natural shoreline, so narrow
+        # channels whose 20 m cells mix water and steep banks are lake too, not "land"
+        # a half-cell buffer keeps narrow straits open; not near the outlet, where it would bypass the sill
+        WX, WY = np.meshgrid(wx, wy)
+        away = np.hypot(WX - cfg["outlet"]["x"], WY - cfg["outlet"]["y"]) > 600
+        water |= polygon_mask(regulated.buffer(cell * 0.5), wx, wy) & away
+        water |= polygon_mask(regulated, wx, wy)
     in_survey = polygon_mask(survey, wx, wy)
 
     # Bathymetry (same lattice: both grids have origins on multiples of `cell`).
@@ -101,7 +133,8 @@ def main():
     ok = (rr >= 0) & (rr < depth.shape[0]) & (cc >= 0) & (cc < depth.shape[1])
     bed[ok] = level - depth[rr[ok], cc[ok]]
 
-    use_bed = in_survey & ~np.isnan(bed) & (water | (z < cfg["regulated_hrv_m"] + 1))
+    # only inside the lake polygon: a digitised survey outline can stray a cell or two past the outlet
+    use_bed = in_survey & in_reg & ~np.isnan(bed) & (water | (z < cfg["regulated_hrv_m"] + 1))
     nat = z.copy()
     nat[use_bed] = bed[use_bed]
 
@@ -116,7 +149,9 @@ def main():
         active = g
     t = time.time()
     filled = solve_tension_spline(fixed, active, 0.5)
-    nat[unknown] = np.minimum(filled[unknown], cfg["regulated_hrv_m"])
+    # flooded land lies below HRV; in a drawdown-only reservoir the polygon is natural lake, so below that level
+    cap = cfg["natural_level_m"] - 0.25 if cfg.get("regulated_polygon_is_water") else cfg["regulated_hrv_m"]
+    nat[unknown] = np.minimum(filled[unknown], cap)
     # outside the 1959 shoreline the land was dry at the survey level
     nat[unknown] = np.maximum(nat[unknown], level + 0.05)
     print(f"interpolated {int(unknown.sum())} flooded cells in {time.time() - t:.1f}s")
@@ -140,12 +175,21 @@ def main():
     prof = np.interp(s, vd, vz)
     nat[near] = np.minimum(nat[near], prof)
     print(f"outlet channel {line.length:.0f} m, vertex z {np.round(vz, 1).tolist()}, {int(near.sum())} cells")
+    # Optional sill plug: the whole dam site set to the sill height, so the lake cannot bypass the
+    # threshold through low cells beside it (used where the dam stands right at the lake mouth).
+    plug_r = cfg["outlet"].get("plug_radius_m")
+    if plug_r:
+        plug = np.hypot(X - cfg["outlet"]["x"], Y - cfg["outlet"]["y"]) <= plug_r
+        nat[plug] = cfg["outlet"]["sill_m"]
+        print(f"outlet sill plug r={plug_r} m at {cfg['outlet']['sill_m']} m, {int(plug.sum())} cells")
 
     full = dtm.copy()
     full[win] = nat
-    masks = np.zeros(dtm.shape, np.uint8)  # bit0 regulated water, bit1 surveyed lake, bit2 flooded land, bit3 channel
+    # bit0 regulated water, bit1 surveyed lake, bit2 flooded land, bit3 channel, bit4 schematic lake
+    masks = np.zeros(dtm.shape, np.uint8)
     mw = masks[win]
     mw[water] |= 1; mw[use_bed] |= 2; mw[unknown] |= 4; mw[near] |= 8
+    add_schematic_lakes(cfg, full, masks, xc, yc, cell)
     out = ROOT / "data" / "processed" / f"{lake}_natural{int(cell)}.npz"
     np.savez_compressed(out, z=full.astype(np.float32), x0=x0, y_top=y_top, cell=cell, masks=masks)
     print(f"wrote {out.relative_to(ROOT)}  total {time.time() - t0:.1f}s")

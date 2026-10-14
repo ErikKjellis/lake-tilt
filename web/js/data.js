@@ -36,7 +36,7 @@ export function loadImage(url) {
   });
 }
 
-export async function loadScene(base, progress) {
+export async function loadScene(base, progress, onMeta) {
   const steps = { meta: 0.02, height: 0.25, lakes: 0.18, masks: 0.03, basemap: 0.52 };
   const done = {};
   const report = (k, f, msg) => {
@@ -47,6 +47,7 @@ export async function loadScene(base, progress) {
 
   const meta = await (await fetch(`${base}/meta.json`)).json();
   report("meta", 1, "meta");
+  onMeta?.(meta);
   const g = meta.grid;
 
   const hBuf = await fetchWithProgress(`${base}/height.bin`, (a, b) => report("height", a / b, "terrain"));

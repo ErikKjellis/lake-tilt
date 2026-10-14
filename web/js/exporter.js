@@ -355,7 +355,7 @@ ${rows}
     const { model, meta } = this.app;
     const L = opts.L;
     const lines = [
-      "Altevatnet — poster export",
+      `${meta.name} — poster export`,
       `Exported: ${new Date().toISOString()}`,
       `View: ${opts.mode === "map" ? "map (orthographic, north up = UTM grid north)" : "3D perspective"}  ·  ${opts.W} x ${opts.H} px  ·  vertical exaggeration ${opts.exag}x`,
       bbox ? `Extent EPSG:25833 (ETRS89 / UTM 33N): x ${bbox[0].toFixed(1)}–${bbox[2].toFixed(1)}, y ${bbox[1].toFixed(1)}–${bbox[3].toFixed(1)}  ·  ${((bbox[2] - bbox[0]) / opts.W).toFixed(3)} m/px` : "Extent: perspective view (not georeferenced)",
@@ -371,7 +371,7 @@ ${rows}
           "  The heritage PNGs include the site outlines (solid, translucent fill) and safety zones (dashed) under the markers."] : []),
         `  Heritage marker size ${opts.km.size} px${opts.km.note ? ` (${opts.km.note})` : ""}. Categories: Sami = KML §4.2 / Sami Iron Age / Sami monument type; Stone Age & Early Metal Age; Iron Age & Middle Ages; modern = after 1537; other = older than 100 years, uncertain or undated.`] : []),
       "",
-      `Water style: fill opacity ${Math.round(opts.fillAlpha * 100)} %, outline ${opts.outlinePx} px (inside the shoreline). Leinavatnet ${opts.useLake2 ? "included" : "excluded"}.`,
+      `Water style: fill opacity ${Math.round(opts.fillAlpha * 100)} %, outline ${opts.outlinePx} px (inside the shoreline). ${meta.lakes[2]?.name ?? "Lake 3"} ${opts.useLake2 ? "included" : "excluded"}.`,
       "All images share the same camera, crop and pixel size, so they register exactly when stacked.",
       "",
       "View code (paste into the export panel to restore this viewpoint):",

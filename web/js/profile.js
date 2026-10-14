@@ -96,7 +96,8 @@ export class Profile {
       }
     }
 
-    const zmin = 370, zmax = 540;
+    const [zmin, zmax] = this.scene.data.meta.profile_range ?? [370, 540];
+    const zStep = zmax - zmin > 200 ? 40 : 20;
     const px0 = 44, px1 = W - 10, py0 = 8, py1 = H - 22;
     const pw = px1 - px0;
     this.geom = { px0, pw };
@@ -106,7 +107,7 @@ export class Profile {
     // axes
     ctx.font = "11px Inter, Segoe UI, system-ui, sans-serif";
     ctx.fillStyle = "#93a7b4"; ctx.strokeStyle = "rgba(160,190,210,0.12)"; ctx.lineWidth = 1;
-    for (let z = 380; z <= zmax; z += 20) {
+    for (let z = Math.ceil((zmin + 1) / zStep) * zStep; z <= zmax; z += zStep) {
       ctx.beginPath(); ctx.moveTo(px0, Y(z)); ctx.lineTo(px1, Y(z)); ctx.stroke();
       ctx.fillText(String(z), 6, Y(z) + 4);
     }
@@ -150,9 +151,11 @@ export class Profile {
       ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(255,255,255,0.55)";
       ctx.beginPath(); ctx.moveTo(px0, Y(meta.natural_level_m)); ctx.lineTo(px1, Y(meta.natural_level_m)); ctx.stroke();
       ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillText(S.prof_today, px1 - ctx.measureText(S.prof_today).width - 4, Y(meta.natural_level_m) - 4);
-      ctx.strokeStyle = "rgba(255,138,122,0.6)";
-      ctx.beginPath(); ctx.moveTo(px0, Y(meta.regulated.hrv_m)); ctx.lineTo(X(this.marks.find((k) => k.key === "prof_leina")?.s ?? 40), Y(meta.regulated.hrv_m)); ctx.stroke();
-      ctx.fillStyle = "rgba(255,138,122,0.85)"; ctx.fillText(S.prof_hrv, px0 + 4, Y(meta.regulated.hrv_m) - 4);
+      if (Math.abs(meta.regulated.hrv_m - meta.natural_level_m) > 0.3) {   // a drawdown-only reservoir has HRV = natural
+        ctx.strokeStyle = "rgba(255,138,122,0.6)";
+        ctx.beginPath(); ctx.moveTo(px0, Y(meta.regulated.hrv_m)); ctx.lineTo(X(this.marks.find((k) => k.key === "prof_leina")?.s ?? 40), Y(meta.regulated.hrv_m)); ctx.stroke();
+        ctx.fillStyle = "rgba(255,138,122,0.85)"; ctx.fillText(S.prof_hrv, px0 + 4, Y(meta.regulated.hrv_m) - 4);
+      }
       ctx.setLineDash([]);
     }
 
