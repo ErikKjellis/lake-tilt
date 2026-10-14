@@ -354,5 +354,13 @@
     "x": 692140,
     "y": 7607020,
     "note": "SE end of the main basin, wet for every reachable F (used for tilt read-outs)"
+  },
+  "region": {
+    "en": "Bardu, Troms",
+    "no": "Bardu, Troms"
+  },
+  "subtitle": {
+    "en": "Post-glacial rebound in Troms, 10 300 years in 3D",
+    "no": "Postglasial landheving i Troms, 10 300 år i 3D"
   }
 }

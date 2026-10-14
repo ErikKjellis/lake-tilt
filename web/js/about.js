@@ -39,6 +39,7 @@ const SCH = {
 };
 export function aboutHtml(lang, meta, model) {
   const no = lang === "no";
+  if (meta.strings?.[lang]?.about_html) return meta.strings[lang].about_html;   // scene-specific text
   const nb = (v, d = 0) => Number(v).toLocaleString(no ? "nb-NO" : "en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
   const se = meta.se_ref ? [meta.se_ref.x, meta.se_ref.y] : [692140, 7607020];
   const drSE = model.dr(se[0], se[1]);

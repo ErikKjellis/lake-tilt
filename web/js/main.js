@@ -10,10 +10,13 @@ import { STRINGS, applyI18n } from "./i18n.js";
 import { aboutHtml } from "./about.js";
 import { initExportUI } from "./exportui.js";
 import { Heritage, KM_CATS, KM_POLY_DIST } from "./heritage.js";
+import { LakePicker } from "./picker.js";
 
-const DATA = "data/altevatn";
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// ?lake=<folder in web/data/> selects the scene (default: Altevatnet)
+const LAKE = (params.get("lake") || "altevatn").toLowerCase().replace(/[^a-z0-9_-]/g, "") || "altevatn";
+const DATA = `data/${LAKE}`;
 
 const state = {
   t: T_NOW, exag: 3, frame: 0, overlay: 0, iso: true, labels: true, regulated: false, recon: true, border: true,
@@ -23,16 +26,31 @@ const state = {
 };
 const S = () => STRINGS[state.lang];
 
+// ---------------------------------------------------------------- lake picker (works before the scene has loaded)
+const picker = new LakePicker({ current: LAKE, getLang: () => state.lang, strings: () => STRINGS[state.lang] });
+applyI18n(state.lang);
+$("btn-lakes").addEventListener("click", () => picker.open());
+
 // ---------------------------------------------------------------- loading
 const ldFill = $("ld-fill"), ldMsg = $("ld-msg");
 let data;
 try {
-  data = await loadScene(DATA, (p, msg) => { ldFill.style.width = `${Math.round(p * 100)}%`; ldMsg.textContent = `${msg}…`; });
+  data = await loadScene(DATA, (p, msg) => { ldFill.style.width = `${Math.round(p * 100)}%`; ldMsg.textContent = `${msg}…`; },
+    (m) => { const t = document.querySelector(".ld-title"); if (t) t.textContent = m.name; });
 } catch (e) {
-  ldMsg.textContent = `Could not load data (${e.message}). Start the site with start.bat (or "python tools/serve.py") and open http://localhost:8765/.`;
+  ldMsg.textContent = `Could not load data for "${LAKE}" (${e.message}). Start the site with start.bat (or "python tools/serve.py") and open http://localhost:8765/.`;
+  $("loading").remove();
+  picker.open(STRINGS[state.lang].lk_missing(LAKE));   // an unknown ?lake= (or missing data): let the user choose another
   throw e;
 }
 const meta = data.meta;
+// scene-specific texts (titles, outlets, events, profile labels) override the Altevatnet defaults
+for (const [lang, strs] of Object.entries(meta.strings || {})) {
+  const S_ = Object.assign(STRINGS[lang] ?? (STRINGS[lang] = {}), strs);
+  // templates in JSON: "rate_text" with {mm} and {perkm}
+  if (typeof strs.rate_text === "string") { const tpl = strs.rate_text; S_.rate_text = (mm, perkm) => tpl.replace("{mm}", mm).replace("{perkm}", perkm); }
+}
+const legacyScene = meta.outlets.some((o) => o.id === "leina");   // Altevatnet-only features (events, notes, tour)
 const model = new UpliftModel(meta);
 model.deglac = meta.deglaciation?.best ?? 10300;
 model.defaults.deglac = model.deglac;
@@ -49,7 +67,9 @@ let camera = perspCam;      // switches to an orthographic camera in map view
 perspCam.up.set(0, 0, 1);
 
 const lowEnd = params.get("q") === "low" || (params.get("q") !== "high" && (/Mobi|Android/i.test(navigator.userAgent) || (navigator.hardwareConcurrency || 8) <= 2));
-const lake = new LakeScene(data, model, lowEnd ? 2 : 1);
+// 20 m scenes are drawn every other vertex (40 m) unless ?q=high
+const baseStride = params.get("q") === "high" || meta.grid.cell >= 40 ? 1 : 2;
+const lake = new LakeScene(data, model, lowEnd ? baseStride * 2 : baseStride);
 scene3.add(lake.group);
 
 const labelRenderer = new CSS2DRenderer({ element: $("labels") });
@@ -59,7 +79,7 @@ function makeControls(cam, map) {
   c.enableDamping = true;
   c.dampingFactor = 0.08;
   c.zoomToCursor = true;
-  c.maxTargetRadius = 40000; // keep the target on the 68 x 48 km tile (origin = tile centre)
+  c.maxTargetRadius = 0.6 * Math.max(meta.grid.nx, meta.grid.ny) * meta.grid.cell; // keep the target on the tile (origin = tile centre)
   if (map) {
     c.enableRotate = false;
     c.screenSpacePanning = true;
@@ -134,6 +154,17 @@ const VIEWS = {
   side: { target: [681000, 7608000, 0], az: 200, el: 14, dist: 52000 },
   tilt: { target: [682000, 7610000, 0], az: 208, el: 50, dist: 64000 },
 };
+if (meta.views) { for (const k of Object.keys(VIEWS)) delete VIEWS[k]; Object.assign(VIEWS, meta.views); }
+// the guided tour is written for Altevatnet; other scenes opt in with "tour": true
+const hasTour = meta.tour ?? legacyScene;
+if (!hasTour) $("btn-tour").classList.add("hidden");
+// scenes without their own views: look at the whole render window from the SSW
+if (!meta.views && !legacyScene) {
+  const g = meta.grid, w = g.nx * g.cell, h = g.ny * g.cell;
+  const cx = g.x0 + w / 2, cy = g.y1 - h / 2, d = 1.05 * Math.max(w, h);
+  for (const k of Object.keys(VIEWS)) delete VIEWS[k];
+  Object.assign(VIEWS, { overview: { target: [cx, cy, 0], az: 200, el: 35, dist: d } });
+}
 setView(VIEWS.overview);
 
 // ---------------------------------------------------------------- textures
@@ -412,7 +443,7 @@ function setLang(lang) {
   state.lang = lang;
   try { localStorage.setItem("altevatn.lang", lang); } catch { /* private mode */ }
   for (const x of document.querySelectorAll(".lang button")) x.classList.toggle("on", x.dataset.lang === lang);
-  applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso();
+  applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso(); picker.relabel();
   for (const o of labels) o.element.innerHTML = labelHtml(o.userData.p);
   if (tour.active) showStep(tour.i, false);
   exportUI?.rerender();
@@ -431,12 +462,13 @@ $("about").addEventListener("click", (e) => { if (e.target.id === "about") $("ab
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (!$("about").classList.contains("hidden")) { $("about").classList.add("hidden"); return; }
+    if (picker.isOpen()) { picker.close(); return; }
     if (kmOpen) { closeKmPopup(); return; }
     if (exportUI?.isOpen()) { exportUI.close(); return; }
     if (tour.active) endTour();
     return;
   }
-  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || picker.isOpen()) return;
   if (tour.active && ["PageDown", "ArrowRight", "Enter"].includes(e.key)) { e.preventDefault(); $("cap-next").click(); return; }
   if (tour.active && ["PageUp", "ArrowLeft"].includes(e.key)) { e.preventDefault(); $("cap-prev").click(); return; }
   if (e.key === " ") { e.preventDefault(); state.playing ? stopPlay() : startPlay(); }
@@ -445,7 +477,7 @@ window.addEventListener("keydown", (e) => {
     const step = (e.shiftKey ? 1000 : 100) * (e.key === "ArrowLeft" ? 1 : -1);
     setTime(state.t + step);
   }
-  if (/^[1-8]$/.test(e.key)) { if (!tour.active) startTour(); showStep(Number(e.key) - 1); }
+  if (/^[1-8]$/.test(e.key) && hasTour) { if (!tour.active) startTour(); showStep(Number(e.key) - 1); }
   if (e.key === "f") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
   if (e.key === "l") setLang(state.lang === "en" ? "no" : "en");
   if (e.key === "p") $("app").classList.toggle("present");
@@ -463,12 +495,12 @@ $("btn-shot").addEventListener("click", () => {
   ctx.font = `600 ${Math.round(26 * k)}px Inter, Segoe UI, sans-serif`; ctx.fillStyle = "#fff";
   ctx.shadowColor = "rgba(0,0,0,.7)"; ctx.shadowBlur = 6 * k;
   const y = formatYear(state.t, state.lang);
-  ctx.fillText(`Altevatnet — ${y.main}`, 24 * k, 44 * k);
+  ctx.fillText(`${meta.name} — ${y.main}`, 24 * k, 44 * k);
   ctx.font = `${Math.round(15 * k)}px Inter, Segoe UI, sans-serif`;
   ctx.fillText(`${y.sub} · ${state.exag}× ${state.lang === "no" ? "vertikal overdrivelse" : "vertical exaggeration"}`, 24 * k, 70 * k);
   ctx.fillText($("attrib").textContent, 24 * k, cv.height - 18 * k);
   const a = document.createElement("a");
-  a.download = `altevatnet_${Math.round(state.t)}BP.png`;
+  a.download = `${LAKE}_${Math.round(state.t)}BP.png`;
   a.href = cv.toDataURL("image/png");
   a.click();
 });
@@ -520,12 +552,17 @@ function buildTimeline() {
   const shortOf = (e) => ({ ev_to_atl: L.short_atl, ev_to_bal: L.short_bal, ev_merge: L.short_merge, ev_split: L.short_split })[e.key] ?? "";
   const evs = model.events().map((e) => ({ ...e, text: L[e.key], short: shortOf(e) }));
   evs.push({ t: model.deglac, type: "ice", text: L.ev_deglac, short: L.short_deglac });
-  const tSE = meta.deglaciation?.se ?? 10200;
-  if (tSE < model.deglac) evs.push({ t: tSE, type: "ice", text: L.ev_se_ice, short: "" });
-  if (9900 < model.deglac) evs.push({ t: 9900, type: "ice", text: L.ev_torne, short: "" });
-  evs.push({ t: 1950 - 1922, type: "hum", text: L.ev_1922, short: "" });
-  evs.push({ t: 1950 - 1952, type: "hum", text: L.ev_1951, short: "" });
-  evs.push({ t: 1950 - 1960, type: "hum", text: L.ev_1960, short: L.short_1960 });
+  if (meta.events) {
+    // scene-specific fixed events: { t (cal BP), type, key[, short] } with texts in meta.strings
+    for (const e of meta.events) if (e.t < model.deglac) evs.push({ t: e.t, type: e.type, text: L[e.key] ?? e.key, short: e.short ? L[e.short] ?? "" : "" });
+  } else {
+    const tSE = meta.deglaciation?.se ?? 10200;
+    if (tSE < model.deglac) evs.push({ t: tSE, type: "ice", text: L.ev_se_ice, short: "" });
+    if (9900 < model.deglac) evs.push({ t: 9900, type: "ice", text: L.ev_torne, short: "" });
+    evs.push({ t: 1950 - 1922, type: "hum", text: L.ev_1922, short: "" });
+    evs.push({ t: 1950 - 1952, type: "hum", text: L.ev_1951, short: "" });
+    evs.push({ t: 1950 - 1960, type: "hum", text: L.ev_1960, short: L.short_1960 });
+  }
   for (const e of evs) {
     const d = document.createElement("div");
     d.className = `tl-ev ${e.type}`;
@@ -539,8 +576,9 @@ function buildTimeline() {
   const g = model.Fgrid;
   let runStart = model.deglac, runKind = null;
   const kindAt = (t) => model.regimeAt(model.F(t)).final;
+  const tRes = 1950 - (meta.dam?.year ?? 1960);
   for (let t = model.deglac; t >= T_END; t -= 10) {
-    const k = t < 1950 - 1960 ? "res" : kindAt(t);
+    const k = t < tRes ? "res" : kindAt(t);
     if (k !== runKind) {
       if (runKind) addBand(runStart, t, runKind);
       runStart = t; runKind = k;
@@ -549,7 +587,8 @@ function buildTimeline() {
   addBand(runStart, T_END, runKind);
   function addBand(ta, tb, kind) {
     const b = document.createElement("div");
-    b.className = `tl-band ${kind === "secol" ? "bal" : kind === "luspi" ? "atl" : kind === "res" ? "hum" : "oth"}`;
+    const sea = model.seaOf(kind);
+    b.className = `tl-band ${sea === "Baltic" ? "bal" : sea === "Atlantic" ? "atl" : kind === "res" ? "hum" : "oth"}`;
     b.style.left = `${tToPos(ta) * 100}%`; b.style.width = `${(tToPos(tb) - tToPos(ta)) * 100}%`;
     bands.appendChild(b);
   }
@@ -615,19 +654,20 @@ function updateReadouts(F) {
   const st = model.stats(0, F);
   $("k-area").textContent = `${fmt(st.area, 0)} ${L.km2}`;
   const notes = [];
-  if (st.merged.includes(2)) notes.push(L.merged_with_leina);
-  if (!st.merged.includes(1)) notes.push(L.west_separate);
+  if (legacyScene && st.merged.includes(2)) notes.push(L.merged_with_leina);
+  if (legacyScene && !st.merged.includes(1)) notes.push(L.west_separate);
+  for (const n of meta.lake_notes ?? []) if (st.merged.includes(n.lake) === n.when_merged) notes.push(L[n.key] ?? "");
   $("k-area2").textContent = notes.join(" · ");
   const future = state.t < T_NOW;
   $("k-uplift").textContent = `${fmt(Math.abs(model.rRef * F / 1000))} m`;
   $("k-uplift-label").textContent = future ? L.k_uplift_future : L.k_uplift;
   const reg = model.regimeAt(F);
   const o = $("outlet");
-  let text = reg.final === "luspi" ? L.outlet_luspi : reg.final === "secol" ? (state.t > 9900 ? L.outlet_secol_ice : L.outlet_secol) : L.outlet_other;
+  let text = reg.final === "secol" && state.t > 9900 && legacyScene ? L.outlet_secol_ice : L[`outlet_${reg.final}`] ?? L.outlet_other;
   if (state.t > (meta.deglaciation?.se ?? 10200)) text += ` ${L.se_ice_note}`;
   if (state.regulated) text = L.outlet_regulated;
   $("outlet-text").textContent = text;
-  o.classList.toggle("baltic", !state.regulated && reg.final === "secol");
+  o.classList.toggle("baltic", !state.regulated && model.seaOf(reg.final) === "Baltic");
   const rf = model.rateFactor(state.t);
   $("k-rate").textContent = L.rate_text(fmt(drSE * rf, 2), fmt(drSE * rf / distSE, 4));
   const y = formatYear(state.t, state.lang);
@@ -649,7 +689,8 @@ function updateLegend(F) {
     legend.innerHTML = `<div>${lab}</div><div class="bar" style="background:linear-gradient(90deg,#306bbf 0%,#f5f2eb ${pct}%,#cc4233 100%)"></div><div class="ticks"><span>−${fmt(lo, lo < 10 ? 1 : 0)}</span><span>0</span><span>+${fmt(hi, hi < 10 ? 1 : 0)}</span></div><div class="fine" style="margin:4px 0 0">${L.legend_contours}: ${fmt(u.uOvStep.value, u.uOvStep.value < 1 ? 1 : 0)} m</div>`;
     legend.classList.remove("hidden");
   } else if (state.overlay === 2) {
-    legend.innerHTML = `<div>${L.legend_rate}</div><div class="bar" style="background:linear-gradient(90deg,#30123b,#4686fb,#1be5b5,#a4fc3c,#fbb938,#e4460a,#7a0403)"></div><div class="ticks"><span>${fmt(4.0)}</span><span>${fmt(4.7)}</span><span>${fmt(5.4)}</span></div>`;
+    const [r0, r1] = lake.rateRange;
+    legend.innerHTML = `<div>${L.legend_rate}</div><div class="bar" style="background:linear-gradient(90deg,#30123b,#4686fb,#1be5b5,#a4fc3c,#fbb938,#e4460a,#7a0403)"></div><div class="ticks"><span>${fmt(r0)}</span><span>${fmt((r0 + r1) / 2)}</span><span>${fmt(r1)}</span></div>`;
     legend.classList.remove("hidden");
   } else if (state.iso && !state.regulated && isoTimes.length) {
     legend.innerHTML = `<div>${L.legend_iso}</div><div class="bar" style="background:linear-gradient(90deg,#cc73ff,#ffdb59)"></div><div class="ticks"><span>${isoTimes[0] / 1000}k BP</span><span>${isoTimes[isoTimes.length - 1] / 1000}k BP</span></div>`;

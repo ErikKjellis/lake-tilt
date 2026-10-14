@@ -102,7 +102,7 @@ export function initExportUI(app) {
         label: L.ex_lab_past(nb(t), ago), fileStem: `water_${Math.round(t)}calBP` });
     });
     const reg = meta.regulated;
-    if (ui.natural) out.push({ key: "natural", kind: "natural", colour: ui.colours.natural ?? TODAY_COLOURS.natural, label: L.ex_lab_natural, fileStem: "today_natural_475.8m" });
+    if (ui.natural) out.push({ key: "natural", kind: "natural", colour: ui.colours.natural ?? TODAY_COLOURS.natural, label: L.ex_lab_natural, fileStem: `today_natural_${meta.strings ? meta.natural_level_m : "475.8"}m` });   // Altevatnet: local-datum level
     if (ui.lrv) out.push({ key: "lrv", kind: "lrv", level: reg.lrv_m, colour: ui.colours.lrv ?? TODAY_COLOURS.lrv, label: L.ex_lab_lrv, fileStem: "today_reservoir_LRV_472.8m" });
     if (ui.hrv) out.push({ key: "hrv", kind: "hrv", level: reg.hrv_m, colour: ui.colours.hrv ?? TODAY_COLOURS.hrv, label: L.ex_lab_hrv, fileStem: "today_reservoir_HRV_489.0m" });
     out.forEach((Ly, i) => { Ly.file = `${String(i + 1).padStart(2, "0")}_${Ly.fileStem}.png`; });
@@ -249,7 +249,7 @@ export function initExportUI(app) {
       }, (msg) => { prog.textContent = msg; });
       const a = document.createElement("a");
       const day = new Date().toISOString().slice(0, 10);
-      a.download = `altevatnet_poster_${ui.mode}_${day}.zip`;
+      a.download = `${meta.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}_poster_${ui.mode}_${day}.zip`;
       a.href = URL.createObjectURL(blob);
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 60000);

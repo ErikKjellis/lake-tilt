@@ -20,10 +20,13 @@ python tools/serve.py 8765
 
 Then open <http://localhost:8765>. Everything, including three.js, is vendored in `web/`, so it works offline. Only the optional aerial-photo basemap needs internet.
 
+**Choose lake** in the title card opens the lake picker: a map of Norway with a pin for each scene, and a search box (lake, place or county). Scenes are listed in `web/data/lakes.json`, which `tools/export_web.py` updates whenever it exports a scene.
+
 URL options:
+- `?lake=tunnsjoen` — the Tunnsjøen scene (see below); the default is Altevatnet
 - `?lang=no` — Norwegian
 - `?q=low` — 80 m mesh for weak GPUs
-- `?q=high` — force the 40 m mesh
+- `?q=high` — force the full mesh (40 m for Altevatnet, 20 m for Tunnsjøen)
 
 ## What you see
 
@@ -137,7 +140,42 @@ python tools/export_web.py
    - the outlet point and channel
    - the lakes to track
    - the render box and places
-4. Run the pipeline above and point `DATA` in `web/js/main.js` at the new folder.
+4. Run the pipeline above with the config as the argument. Then open the viewer with `?lake=<lake>`.
+
+Scene-specific texts, events and views go in the config and are passed through `meta.json`:
+- `strings.en` / `strings.no`: override any interface string, including `about_html`, `outlet_<outlet id>` and `rate_text` with `{mm}`/`{perkm}`.
+- `events`, `views`, `tour: false`, `lake_notes`, `profile_range`, `profile_z0`, `bed_ramp`, `border_admin`.
+- Outlets carry `sea` (`Atlantic`/`Baltic`), which colours the timeline. They can also carry `via_lake`, to follow a spill into another tracked lake.
+
+Options for regulated lakes without good data:
+- `schematic_lakes`: a placeholder basin for a lake without digital bathymetry. Its spill levels are right; its depths are not.
+- `regulated_polygon_is_water`: for drawdown-only reservoirs, where HRV equals the natural level.
+- `outlet.plug_radius_m`: a sill plug at the outlet.
+
+### Tunnsjøen (`?lake=tunnsjoen`)
+
+Tunnsjøen (Lierne/Røyrvik, Trøndelag; NVE 696) is the second scene. The model shows it draining **east to the Baltic** over a low mire col (Tunnsjøfloan, ≈ 359 m, only ~1.6 m above the natural level) for most of the Holocene. It switches to today's western outlet (Tunnsjøelva → Namsen → Atlantic) only around 2 700 cal BP. That date is sensitive to the col height: ±0.7 m moves it by about ±1 000 yr.
+
+- **Bathymetry:** digitised in this project from NVE's scanned 1946 map. See [tools/research/digitise_depth_map](tools/research/digitise_depth_map/README.md) and `docs/tunnsjoen_digitisation_check.png`.
+- **Limingen:** included with a schematic basin.
+- **Background:** [docs/candidate_lakes.md](docs/candidate_lakes.md).
+
+```
+python tools/fetch_nve.py 696 tunnsjoen
+python tools/fetch_nve.py 1131 limingen
+python tools/fetch_dtm_wcs.py data/raw/dtm_lt/tiles_10m 395000 7150000 460000 7215000 10 3250 1625 bilinear
+python tools/mosaic_dtm.py data/raw/dtm_lt/tiles_10m data/raw/dtm_lt/dtm10_lt
+(digitise the depth map: tools/research/digitise_depth_map)
+python tools/bathymetry.py --lake tunnsjoen
+python tools/natural_dem.py tools/scenes/tunnsjoen.json
+python tools/paleolakes.py tools/scenes/tunnsjoen.json        (about 6 min, 20 m grid)
+python tools/bake_basemap.py topo 11 web/data/tunnsjoen/basemap_topo.jpg --bbox 406000 7162000 450000 7202000
+python tools/bake_basemap.py topograatone 11 web/data/tunnsjoen/basemap_grey.jpg --bbox 406000 7162000 450000 7202000
+python tools/fetch_kulturminner.py tools/scenes/tunnsjoen.json
+python tools/export_web.py tools/scenes/tunnsjoen.json
+```
+
+The uplift grid `data/processed/tunnsjoen_uplift_rate_grid.json` comes from `uplift_grid()` in `tools/research/lake_screening/simple_natural_dem.py`. The county border comes from `https://ws.geonorge.no/kommuneinfo/v1/fylker/50/omrade?utkoordsys=25833`.
 
 ## Data and credits
 

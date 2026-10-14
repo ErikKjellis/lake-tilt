@@ -1,0 +1,44 @@
+{
+  "lake": "limingen_tunnsjoen",
+  "name": "Limingen + Tunnsjøen (screening run)",
+  "dtm": "data/raw/dtm_lt/dtm20_lt",
+  "nkg_dir": "../../../data/raw/nkg2016lu_lm/extracted",
+  "uplift_grid": "data/processed/limingen_tunnsjoen_uplift_rate_grid.json",
+  "cell_dem": 20,
+  "cell_mesh": 40,
+  "bowl_slope": 0.05,
+  "bowl_cap": 0.6,
+  "screen_lakes": [
+    {
+      "file": "data/raw/limingen_innsjo.geojson",
+      "natural_level_m": 417.7,
+      "max_depth_m": 192,
+      "dams": [
+        {"name": "Limingen dam (natural outlet, Linvasselva)", "x": 441012, "y": 7174482, "radius_m": 200},
+        {"name": "Gjersvika terskel", "x": 425197, "y": 7193370, "radius_m": 100}
+      ]
+    },
+    {
+      "file": "data/raw/tunnsjoen_innsjo.geojson",
+      "natural_level_m": 357.64,
+      "max_depth_m": 222,
+      "dams": [
+        {"name": "Tunnsjøen hoveddam (natural outlet, Tunnsjøelva)", "x": 414926, "y": 7175128, "radius_m": 200},
+        {"name": "Tunnsjøen sekundærdam", "x": 415075, "y": 7175007, "radius_m": 150}
+      ]
+    }
+  ],
+  "outlet": {
+    "name": "Limingen natural outlet (Linvasselva → Faxälven, Baltic)",
+    "x": 441012,
+    "y": 7174482,
+    "sill_m": 417.7
+  },
+  "rate_fit_centre": [427500.0, 7182500.0],
+  "F_grid": {"min": -4000, "max": 60000, "step": 250},
+  "lakes": [
+    {"name": "Limingen", "region": "data/raw/limingen_innsjo.geojson"},
+    {"name": "Tunnsjøen", "region": "data/raw/tunnsjoen_innsjo.geojson"}
+  ],
+  "note": "Natural levels = HRV (both regulations are drawdowns; the 1952 high water is not exceeded), local datum, about ±0.5 m from NN2000. No digital bathymetry: placeholder bowls."
+}

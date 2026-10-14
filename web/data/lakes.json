@@ -1,0 +1,40 @@
+{
+ "lakes": [
+  {
+   "id": "altevatn",
+   "name": "Altevatnet",
+   "vatnlnr": 2396,
+   "lat": 68.585,
+   "lon": 19.32,
+   "x": 679107,
+   "y": 7612800,
+   "region": {
+    "en": "Bardu, Troms",
+    "no": "Bardu, Troms"
+   },
+   "subtitle": {
+    "en": "Post-glacial rebound in Troms, 10 300 years in 3D",
+    "no": "Postglasial landheving i Troms, 10 300 år i 3D"
+   },
+   "level_m": 475.95
+  },
+  {
+   "id": "tunnsjoen",
+   "name": "Tunnsjøen",
+   "vatnlnr": 696,
+   "lat": 64.7246,
+   "lon": 13.2897,
+   "x": 418527,
+   "y": 7178867,
+   "region": {
+    "en": "Lierne/Røyrvik, Trøndelag",
+    "no": "Lierne/Røyrvik, Trøndelag"
+   },
+   "subtitle": {
+    "en": "Post-glacial rebound in Trøndelag: an outlet that switched seas",
+    "no": "Postglasial landheving i Trøndelag: et utløp som byttet hav"
+   },
+   "level_m": 357.64
+  }
+ ]
+}

@@ -75,6 +75,33 @@ def ramp(z, stops):
     return np.stack([np.interp(z, zs, cs[:, k]) for k in range(3)], axis=-1)
 
 
+def rate_grid(pl, X, Y):
+    c, (cx, cy) = pl["rate_coef"], pl["rate_fit_centre"]
+    u, v = (X - cx) / 1000, (Y - cy) / 1000
+    return c[0] + c[1] * u + c[2] * v + c[3] * u * u + c[4] * v * v + c[5] * u * v
+
+
+def register_scene(cfg, pl):
+    """Add or update this scene in web/data/lakes.json, the list the viewer's lake picker reads."""
+    reg_path = ROOT / "web" / "data" / "lakes.json"
+    reg = json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.exists() else {"lakes": []}
+    region = shape(feats(pl["lakes"][0]["region"])[0]["geometry"])
+    c = region.representative_point()
+    lon, lat = TO_LL.transform(c.x, c.y)
+    st = cfg.get("strings", {})
+    entry = {
+        "id": cfg["lake"], "name": cfg["name"], "vatnlnr": cfg.get("vatnlnr"),
+        "lat": round(lat, 4), "lon": round(lon, 4), "x": round(c.x), "y": round(c.y),
+        "region": cfg.get("region", {}),
+        "subtitle": {k: v.get("subtitle") for k, v in st.items() if v.get("subtitle")} or cfg.get("subtitle", {}),
+        "level_m": cfg["natural_level_m"],
+    }
+    reg["lakes"] = [L for L in reg["lakes"] if L["id"] != entry["id"]] + [entry]
+    reg["lakes"].sort(key=lambda L: L["name"])
+    reg_path.write_text(json.dumps(reg, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"registered {entry['id']} in {reg_path.relative_to(ROOT)} ({len(reg['lakes'])} scenes)")
+
+
 def main():
     cfg = load_cfg(sys.argv[1] if len(sys.argv) > 1 else None)
     lake = cfg["lake"]
@@ -133,7 +160,7 @@ def main():
     rgba[..., 1] = ((m20 & 2) > 0) * 255
     rgba[..., 2] = ((m20 & (4 | 8)) > 0) * 255
     nodepth = np.zeros(X20.shape, bool)
-    for spec in cfg.get("lakes_without_bathymetry", []):
+    for spec in cfg.get("lakes_without_bathymetry", []) + cfg.get("schematic_lakes", []):
         p = shape(feats(spec["file"])[0]["geometry"]); shapely.prepare(p)
         nodepth |= shapely.contains_xy(p, X20, Y20)
     rgba[..., 3] = np.where(nodepth, 255, 0)
@@ -153,7 +180,9 @@ def main():
     z10 = np.where(rec10, zn10, z10)
     hs = 0.55 * hillshade(z10, 10, 315, 40) + 0.25 * hillshade(z10, 10, 255, 50) + 0.2 * hillshade(z10, 10, 15, 55)
     zs = ndimage.gaussian_filter(z10, 1.0)
-    col = ramp(zs, HYPSO)
+    hypso = [(z_, tuple(c_)) for z_, c_ in cfg["hypso_ramp"]] if "hypso_ramp" in cfg else HYPSO
+    bed_ramp = [(z_, tuple(c_)) for z_, c_ in cfg["bed_ramp"]] if "bed_ramp" in cfg else BED
+    col = ramp(zs, hypso)
     # lake-bed colours only inside the modelled basins (ever wet) and present lakes
     ever10 = np.zeros((ny, nx), bool)
     for li in range(len(pl["lakes"])):
@@ -161,7 +190,7 @@ def main():
         ok_ = (rr_ >= 0) & (rr_ < ny) & (cc_ >= 0) & (cc_ < nx); ever10[rr_[ok_], cc_[ok_]] = True
     ever10 = np.kron(ndimage.binary_dilation(ever10, iterations=1), np.ones((2 * k, 2 * k), bool))[:z10.shape[0], :z10.shape[1]]
     bed = (zs < cfg["natural_level_m"]) & ever10
-    col[bed] = ramp(zs[bed], BED)
+    col[bed] = ramp(zs[bed], bed_ramp)
     shade = (0.35 + 0.8 * hs)[..., None]
     img = np.clip(col * shade, 0, 255).astype(np.uint8)
     width = 6144
@@ -181,13 +210,14 @@ def main():
     allowed = ndimage.binary_dilation(ever | chan_mask, iterations=3)
     ids = -np.ones((ny, nx), np.int64); ids[allowed] = np.arange(int(allowed.sum()))
     rows, cols, w = [], [], []
-    zc = np.clip(z, None, 560)
+    z0p, zclip = cfg.get("profile_z0", 360.0), cfg.get("profile_zclip", 560.0)   # path cost: stay low, cross cols
+    zc = np.clip(z, None, zclip)
     for dr_, dc_ in ((0, 1), (1, 0), (1, 1), (1, -1)):
         ca0, ca1 = max(0, -dc_), nx - max(0, dc_)
         a, b = ids[0:ny - dr_, ca0:ca1], ids[dr_:ny, ca0 + dc_:ca1 + dc_]
         za, zb = zc[0:ny - dr_, ca0:ca1], zc[dr_:ny, ca0 + dc_:ca1 + dc_]
         ok = (a >= 0) & (b >= 0)
-        cost = np.hypot(dr_, dc_) * (1.0 + ((np.maximum(za[ok], zb[ok]) - 360.0) / 25.0) ** 4)
+        cost = np.hypot(dr_, dc_) * (1.0 + ((np.maximum(za[ok], zb[ok]) - z0p) / 25.0) ** 4)
         rows += [a[ok], b[ok]]; cols += [b[ok], a[ok]]; w += [cost, cost]
     G = csr_matrix((np.concatenate(w), (np.concatenate(rows), np.concatenate(cols))), shape=(int(allowed.sum()),) * 2)
 
@@ -246,7 +276,7 @@ def main():
     # --- outlines -----------------------------------------------------------
     box = shapely.box(bx0, by0, bx1, by1)
     border = None
-    adm = [ROOT / "data" / "raw" / "admin" / f for f in ("fylke_18_omrade_25833.json", "fylke_55_omrade_25833.json")]
+    adm = [ROOT / f for f in cfg.get("border_admin", ["data/raw/admin/fylke_18_omrade_25833.json", "data/raw/admin/fylke_55_omrade_25833.json"])]
     if all(p.exists() for p in adm):
         norway = unary_union([shape(json.loads(p.read_text())["omrade"]) for p in adm])
         border = norway.boundary.intersection(box.buffer(-50))
@@ -282,10 +312,15 @@ def main():
         "places": places,
         "outlines": outlines,
         "deglaciation": cfg.get("deglaciation"),
+        "schematic_lakes": [L.get("name", L["file"]) for L in cfg.get("schematic_lakes", [])],
+        "rate_range": [round(float(v), 2) for v in np.percentile(
+            rate_grid(pl, X, Y), [0, 100])],
+        **{k: cfg[k] for k in ("views", "tour", "events", "strings", "lake_notes", "profile_range") if k in cfg},
         "model": cfg.get("model", {}),
         "sources": cfg.get("sources", []),
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    register_scene(cfg, pl)
     print(f"wrote {out_dir.relative_to(ROOT)}: " + ", ".join(f"{p.name} {p.stat().st_size / 1e6:.1f} MB" for p in sorted(out_dir.iterdir())))
 
 
