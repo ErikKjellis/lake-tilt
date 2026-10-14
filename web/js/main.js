@@ -11,6 +11,7 @@ import { aboutHtml } from "./about.js";
 import { initExportUI } from "./exportui.js";
 import { Heritage, KM_CATS, KM_POLY_DIST } from "./heritage.js";
 import { LakePicker } from "./picker.js";
+import { initGuide } from "./guide.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -80,9 +81,13 @@ function makeControls(cam, map) {
   c.dampingFactor = 0.08;
   c.zoomToCursor = true;
   c.maxTargetRadius = 0.6 * Math.max(meta.grid.nx, meta.grid.ny) * meta.grid.cell; // keep the target on the tile (origin = tile centre)
+  c.addEventListener("start", () => { flight = null; });   // the user takes over from a tour flight
   if (map) {
     c.enableRotate = false;
     c.screenSpacePanning = true;
+    // like a web map: drag (one finger) pans, wheel/pinch zooms
+    c.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    c.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     // zoom is relative to the frustum the map view was opened with: allow down to ~120 m view height
     c.minZoom = 0.05; c.maxZoom = Math.max(40, (cam.top - cam.bottom) / 120);
   } else {
@@ -106,6 +111,7 @@ function viewDist() {
 }
 function setCamMode(mode) {
   if ((mode === "map") === isMapView()) return;
+  flight = null;
   const target = controls.target.clone();
   const aspect = window.innerWidth / window.innerHeight;
   controls.dispose();
@@ -130,7 +136,14 @@ function setCamMode(mode) {
     controls.target.set(target.x, target.y, 0);
   }
   controls.update();
+  syncCamUi();
   dirty = true;
+}
+function syncCamUi() {
+  for (const b of $("seg-cam").children) {
+    const on = (b.dataset.cam === "map") === isMapView();
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
+  }
 }
 
 function setView(v, ms = 0) {
@@ -166,6 +179,16 @@ if (!meta.views && !legacyScene) {
   Object.assign(VIEWS, { overview: { target: [cx, cy, 0], az: 200, el: 35, dist: d } });
 }
 setView(VIEWS.overview);
+const resetView = () => {
+  if (exporting) return;
+  if (exportUI?.isOpen()) exportUI.close();
+  setView(VIEWS.overview, 1500);
+};
+window.addEventListener("pointerdown", (e) => {
+  if (!isMapView() || e.target !== renderer.domElement || e.pointerType !== "mouse") return;
+  const mod = e.shiftKey || e.ctrlKey || e.metaKey;
+  controls.mouseButtons.LEFT = controls.mouseButtons.RIGHT = mod ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+}, true);
 
 // ---------------------------------------------------------------- textures
 function makeTexture(img) {
@@ -403,6 +426,8 @@ let playStopAt = T_NOW;
 btnPlay.addEventListener("click", () => (state.playing ? stopPlay() : startPlay()));
 $("s-speed").addEventListener("change", (e) => (state.speed = Number(e.target.value)));
 
+$("seg-cam").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setCamMode(b.dataset.cam); });
+$("btn-home").addEventListener("click", resetView);
 $("r-exag").addEventListener("input", (e) => { state.exag = Number(e.target.value); $("o-exag").textContent = `${state.exag}×`; dirty = true; });
 $("seg-frame").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
@@ -448,39 +473,66 @@ function setLang(lang) {
   if (tour.active) showStep(tour.i, false);
   exportUI?.rerender();
   if (kmOpen) openKmPopup(kmOpen);
+  guide?.rerender(); translateAttrs();
   if (!$("about").classList.contains("hidden")) $("about-content").innerHTML = aboutHtml(state.lang, meta, model);
   dirty = true;
+}
+/** aria-labels and tooltips are not covered by data-i18n */
+function translateAttrs() {
+  const L = S();
+  $("btn-home").setAttribute("aria-label", L.reset_view); $("btn-home").title = `${L.reset_view} (R)`;
+  $("seg-cam").setAttribute("aria-label", L.cam_group);
+  $("about-close").setAttribute("aria-label", L.close);
 }
 for (const box of document.querySelectorAll(".lang")) box.addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (b) setLang(b.dataset.lang);
 });
 
 // about
-$("btn-about").addEventListener("click", () => { $("about-content").innerHTML = aboutHtml(state.lang, meta, model); $("about").classList.remove("hidden"); });
+$("btn-about").addEventListener("click", () => { guide?.closeHelp(false); $("about-content").innerHTML = aboutHtml(state.lang, meta, model); $("about").classList.remove("hidden"); });
 $("about-close").addEventListener("click", () => $("about").classList.add("hidden"));
 $("about").addEventListener("click", (e) => { if (e.target.id === "about") $("about").classList.add("hidden"); });
+let guide = null;   // "how to use the map" guide and the "?" help panel (initialised at the end)
+const NAV_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"];
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (guide?.isHelpOpen()) { guide.closeHelp(); return; }
     if (!$("about").classList.contains("hidden")) { $("about").classList.add("hidden"); return; }
     if (picker.isOpen()) { picker.close(); return; }
+    if (guide?.isOpen()) { guide.close(); return; }
     if (kmOpen) { closeKmPopup(); return; }
     if (exportUI?.isOpen()) { exportUI.close(); return; }
     if (tour.active) endTour();
     return;
   }
-  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || picker.isOpen()) return;
-  if (tour.active && ["PageDown", "ArrowRight", "Enter"].includes(e.key)) { e.preventDefault(); $("cap-next").click(); return; }
-  if (tour.active && ["PageUp", "ArrowLeft"].includes(e.key)) { e.preventDefault(); $("cap-prev").click(); return; }
-  if (e.key === " ") { e.preventDefault(); state.playing ? stopPlay() : startPlay(); }
-  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;            // leave browser shortcuts (Ctrl+F, Ctrl+P …) alone
+  if (picker.isOpen()) return;                                // the lake picker is modal
+  if (!$("about").classList.contains("hidden")) return;       // the About dialog is modal
+  const t = e.target, tag = t.tagName, type = tag === "INPUT" ? t.type : "";
+  // typing in text fields and drop-down menus
+  if (t.isContentEditable || tag === "TEXTAREA" || tag === "SELECT" || (tag === "INPUT" && type !== "range" && type !== "checkbox")) return;
+  // keep the native keys of focused sliders (except the time slider), buttons, links and check boxes
+  if (type === "range" && t !== rTime && NAV_KEYS.includes(e.key)) return;
+  if ((e.key === " " || e.key === "Enter") && (tag === "BUTTON" || tag === "A" || tag === "SUMMARY" || type === "checkbox")) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (e.repeat && key !== "ArrowLeft" && key !== "ArrowRight") return;
+  // the arrows page through the guide while it has the focus
+  if (guide?.pagingFocus() && (key === "ArrowRight" || key === "ArrowLeft")) { e.preventDefault(); key === "ArrowRight" ? guide.next() : guide.prev(); return; }
+  if (tour.active && ["PageDown", "ArrowRight", "Enter"].includes(key)) { e.preventDefault(); $("cap-next").click(); return; }
+  if (tour.active && ["PageUp", "ArrowLeft"].includes(key)) { e.preventDefault(); $("cap-prev").click(); return; }
+  if (key === " ") { e.preventDefault(); state.playing ? stopPlay() : startPlay(); }
+  else if (key === "ArrowLeft" || key === "ArrowRight") {
     e.preventDefault(); stopPlay(); leaveRegulated();
-    const step = (e.shiftKey ? 1000 : 100) * (e.key === "ArrowLeft" ? 1 : -1);
+    const step = (e.shiftKey ? 1000 : 100) * (key === "ArrowLeft" ? 1 : -1);
     setTime(state.t + step);
   }
-  if (/^[1-8]$/.test(e.key) && hasTour) { if (!tour.active) startTour(); showStep(Number(e.key) - 1); }
-  if (e.key === "f") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
-  if (e.key === "l") setLang(state.lang === "en" ? "no" : "en");
-  if (e.key === "p") $("app").classList.toggle("present");
+  else if (/^[1-8]$/.test(key) && !exporting && hasTour) { if (!tour.active) startTour(); showStep(Number(key) - 1); }
+  else if (key === "f") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+  else if (key === "l") setLang(state.lang === "en" ? "no" : "en");
+  else if (key === "p") $("app").classList.toggle("present");
+  else if (key === "m" && !exportUI?.isOpen()) setCamMode(isMapView() ? "persp" : "map");
+  else if (key === "r" && !exportUI?.isOpen()) resetView();
+  else if ((key === "?" || key === "h") && !exportUI?.isOpen()) guide?.toggleHelp();
 });
 
 // save the current 3D view (terrain, water, lines) as PNG, with a small caption
@@ -757,6 +809,8 @@ function showStep(i, fly = true) {
 let timeAnim = null;
 function animateTime(t1, ms) { timeAnim = { t0: performance.now(), ms, a: state.t, b: t1 }; }
 function startTour() {
+  if (exporting) return;
+  if (exportUI?.isOpen()) exportUI.close();
   if (!tour.active) tour.saved = { frame: state.frame, exag: state.exag, overlay: state.overlay };
   tour.active = true; $("app").classList.add("touring"); $("caption").classList.remove("hidden"); showStep(0);
 }
@@ -888,7 +942,7 @@ exportUI = initExportUI({
   renderer, scene: scene3, lake, model, meta, state, S, $, toast,
   getCamera: () => camera, getControls: () => controls, setCamMode, isMapView,
   baseTex, makeTexture, loadOrtho, DATA,
-  setExporting: (on) => { exporting = on; if (!on) { dirty = true; labelsDirty = true; } },
+  setExporting: (on) => { exporting = on; controls.enabled = !on; if (!on) { dirty = true; labelsDirty = true; } },
   hideExtras: (on) => {
     if (on) { closeKmPopup(); kmTip.classList.add("hidden"); }
     for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin, heritage?.points, heritage?.polygons].filter(Boolean)) {
@@ -897,6 +951,9 @@ exportUI = initExportUI({
   },
   markDirty: () => { dirty = true; },
   getHeritage: () => heritage,
-  onOpen: () => { if (tour.active) endTour(); stopPlay(); leaveRegulated(); setFrame(0); },
+  onOpen: () => { guide?.closeHelp(false); guide?.close(); if (tour.active) endTour(); stopPlay(); leaveRegulated(); setFrame(0); },
 });
-window.__lake = { get heritage() { return heritage; }, state, model, lake, get camera() { return camera; }, get controls() { return controls; }, renderer, setTime, setView, VIEWS, setCamMode, exportUI };
+guide = initGuide({ $, S, startTour, resetView });
+guide.rerender(); translateAttrs();
+setTimeout(() => guide.showOnStart(params.get("guide")), 450);   // after the loading screen has faded
+window.__lake = { get heritage() { return heritage; }, state, model, lake, get camera() { return camera; }, get controls() { return controls; }, renderer, setTime, setView, VIEWS, setCamMode, exportUI, guide };
