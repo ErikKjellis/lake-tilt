@@ -9,10 +9,10 @@ export const KM_COLOURS = ["#e63946", "#f4a261", "#2a9d8f", "#9d4edd", "#adb5bd"
 export const KM_SHAPES = ["circle", "triangle", "hexagon", "square", "diamond"];
 export const KM_POLY_DIST = 8000;   // view distance (m) below which polygons and safety zones are shown
 
-const RATE = /* glsl */ `
+/** Shader chunk shared with the own-points layer: the uplift-rate surface and the marker position (tilted frame, exaggeration). */
+export const RATE_CORE = /* glsl */ `
 uniform float uRateC[6]; uniform vec2 uRateCentre; uniform float uRref;
 uniform float uExag, uZBase, uFrame, uF;
-uniform float uOn[5];
 float rateAt(vec2 p){ vec2 q=(p-uRateCentre)/1000.0; return uRateC[0]+uRateC[1]*q.x+uRateC[2]*q.y+uRateC[3]*q.x*q.x+uRateC[4]*q.y*q.y+uRateC[5]*q.x*q.y; }
 vec4 viewPos(vec3 p, float k) {
   float z = p.z - uFrame * (rateAt(p.xy) - uRref) * uF / 1000.0;
@@ -22,7 +22,15 @@ vec4 viewPos(vec3 p, float k) {
   if (projectionMatrix[3][3] > 0.5) mv.z += (1.0 - k) * abs(mv.z); else mv.xyz *= k;
   return mv;
 }
+`;
+
+const RATE = /* glsl */ `
+${RATE_CORE}
+uniform float uOn[5];
+uniform float uFilter;      // 1: only the features selected by Askeladden ID (sel = 1), whatever their category
+attribute float sel;
 float catOn(float c) { int i = int(c + 0.5); return uOn[i]; }
+bool shown(float c, float s) { return catOn(c) > 0.5 && (uFilter < 0.5 || s > 0.5); }
 `;
 
 const PTS_VS = /* glsl */ `
@@ -32,7 +40,7 @@ attribute float cat;
 varying float vCat;
 void main() {
   gl_Position = projectionMatrix * viewPos(position, 0.996);
-  gl_PointSize = catOn(cat) > 0.5 ? uSize : 0.0;
+  gl_PointSize = shown(cat, sel) ? uSize : 0.0;
   vCat = cat;
 }`;
 const PTS_FS = /* glsl */ `
@@ -63,7 +71,7 @@ attribute float cat;
 varying float vCat;
 void main() {
   vCat = cat;
-  gl_Position = catOn(cat) > 0.5 ? projectionMatrix * viewPos(position, 0.997) : vec4(2.0, 2.0, 2.0, 1.0);
+  gl_Position = shown(cat, sel) ? projectionMatrix * viewPos(position, 0.997) : vec4(2.0, 2.0, 2.0, 1.0);
 }`;
 const FILL_FS = /* glsl */ `
 uniform vec3 uCol[5];
@@ -88,7 +96,7 @@ void main() {
   vec2 dir = normalize(sb - sa + vec2(1e-6));
   a.xy += vec2(-dir.y, dir.x) * side * uWidth / uViewport * a.w;
   vCat = cat; vDist = dist;
-  gl_Position = catOn(cat) > 0.5 ? a : vec4(2.0, 2.0, 2.0, 1.0);
+  gl_Position = shown(cat, sel) ? a : vec4(2.0, 2.0, 2.0, 1.0);
 }`;
 const LINE_FS = /* glsl */ `
 uniform vec3 uCol[5];
@@ -117,6 +125,55 @@ function subdivide(tri, maxLen, out) {
   else { const d = mid(c, a); subdivide([a, b, d], maxLen, out); subdivide([d, b, c], maxLen, out); }
 }
 
+/**
+ * Screen positions of marker items for the ID / name labels: [{site, sx, sy, z}] in CSS px (or output px when the
+ * camera has a view offset for an export). Items behind the camera or outside the view are left out, and so are
+ * items hidden behind terrain (perspective camera; the map view looks straight down).
+ * @param {{X: number, Y: number, h: number, dr: number}[]} items local scene coordinates, height, uplift-rate offset
+ * @param {{margin?: number, radiusPx?: number, viewH?: number}} [opt] margin: keep items this far outside the
+ *   view; radiusPx: radius of the marker symbol (an item is hidden only when even its upper edge is covered);
+ *   viewH: height in px of the whole view when `h` is only a crop of it (poster export)
+ */
+export function anchorList(lake, model, items, camera, w, h, state, { margin = 0, radiusPx = 4, viewH = h } = {}) {
+  const F = model.F(state.t), v = new THREE.Vector3(), out = [];
+  const persp = camera.isPerspectiveCamera;
+  camera.updateMatrixWorld();
+  const cam = persp ? camera.getWorldPosition(new THREE.Vector3()) : null;
+  const pxR = persp ? radiusPx * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / viewH : 0;   // view angle of the symbol radius
+  for (const s of items) {
+    const z = (s.h - lake.zBase - state.frame * s.dr * F / 1000) * state.exag;
+    v.set(s.X, s.Y, z).project(camera);
+    if (v.z > 1 || v.z < -1) continue;
+    const sx = (v.x + 1) / 2 * w, sy = (1 - v.y) / 2 * h;
+    if (sx < -margin || sx > w + margin || sy < -margin || sy > h + margin) continue;
+    if (persp && terrainHidden(lake, model, cam, s.X, s.Y, z, state, F, pxR)) continue;
+    out.push({ site: s, sx, sy, z: v.z });
+  }
+  return out;
+}
+
+/**
+ * Is the point (local scene coordinates, already scaled in z) hidden from the camera by the terrain?
+ * The marker is drawn at 99.6 % of its view ray (viewPos), so the sight line is followed to there. The
+ * tolerance is the vertical equivalent of that bias, the mesh interpolation (about one exaggerated metre)
+ * and the symbol's own radius: a marker whose upper edge still peeks out over the ridge keeps its label.
+ * pxR is the view angle of the symbol radius in radians.
+ */
+export function terrainHidden(lake, model, cam, X, Y, Z, state, F, pxR) {
+  const dx = X - cam.x, dy = Y - cam.y, dz = Z - cam.z;
+  const dist = Math.hypot(dx, dy, dz);
+  const steps = Math.min(300, Math.max(8, Math.ceil(dist / 80)));
+  const base = state.exag + 0.004 * Math.abs(dz);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (t > 0.996) break;
+    const ux = cam.x + dx * t + lake.ox, uy = cam.y + dy * t + lake.oy;
+    const terr = (lake.heightAtUtm(ux, uy) - lake.zBase - state.frame * model.dr(ux, uy) * F / 1000) * state.exag;
+    if (terr > cam.z + dz * t + base + pxR * dist * t) return true;
+  }
+  return false;
+}
+
 export class Heritage {
   constructor(lake, model, data) {
     this.lake = lake;
@@ -126,8 +183,13 @@ export class Heritage {
     this.zones = data.zones ?? [];
     this.on = [true, true, true, true, false];
     this.polyVisible = false;
+    this.filter = false;          // true: only the sites selected by Askeladden ID are shown (see setSelection)
+    this.selected = null;         // Uint8Array per site while the filter is on
+    this.selLids = new Set();
+    this.version = 0;             // counts changes of what is shown (the ID labels re-lay out on it)
     const common = {
       ...lake.uniformsCommon,
+      uFilter: { value: 0 },
       uOn: { value: [1, 1, 1, 1, 0] },
       uCol: { value: KM_COLOURS.map(srgb) },
       uPremul: { value: 0 },
@@ -138,6 +200,7 @@ export class Heritage {
     const n = this.sites.length;
     const pos = new Float32Array(n * 3), cat = new Float32Array(n);
     this.sites.forEach((s, i) => {
+      s.i = i;
       const [X, Y] = lake.toLocal(s.x, s.y);
       s.X = X; s.Y = Y; s.h = lake.heightAtUtm(s.x, s.y); s.c = Math.max(0, KM_CATS.indexOf(s.cat));
       s.dr = model.dr(s.x, s.y);
@@ -148,6 +211,7 @@ export class Heritage {
     const pg = new THREE.BufferGeometry();
     pg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     pg.setAttribute("cat", new THREE.BufferAttribute(cat, 1));
+    pg.setAttribute("sel", new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
     this.material = new THREE.ShaderMaterial({
       uniforms: { ...common, uSize: { value: 11 }, uRim: { value: new THREE.Vector3(1, 1, 1) } },
       vertexShader: PTS_VS, fragmentShader: PTS_FS, transparent: true, depthWrite: false,
@@ -167,31 +231,38 @@ export class Heritage {
   }
 
   _fillMesh(items) {
-    const L = this.lake, pos = [], cat = [];
-    for (const it of items) for (const poly of it.poly) {
+    const L = this.lake, pos = [], cat = [], ranges = [];
+    const addPoly = (poly, c) => {
       const contour = poly[0].map(([x, y]) => new THREE.Vector2(x, y));
       const holes = poly.slice(1).map((r) => r.map(([x, y]) => new THREE.Vector2(x, y)));
-      if (contour.length < 3) continue;
+      if (contour.length < 3) return;
       const pts = [...contour, ...holes.flat()];
       for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, holes)) {
         const out = [];
         subdivide([[pts[i].x, pts[i].y], [pts[j].x, pts[j].y], [pts[k].x, pts[k].y]], 25, out);
-        for (const [x, y] of out) { pos.push(x - L.ox, y - L.oy, L.heightAtUtm(x, y)); cat.push(it.c); }
+        for (const [x, y] of out) { pos.push(x - L.ox, y - L.oy, L.heightAtUtm(x, y)); cat.push(c); }
       }
+    };
+    for (const it of items) {      // vertex range of every item, so setSelection can flag its vertices
+      const v0 = cat.length;
+      for (const poly of it.poly) addPoly(poly, it.c);
+      ranges.push([v0, cat.length]);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute("cat", new THREE.Float32BufferAttribute(cat, 1));
+    g.setAttribute("sel", new THREE.Float32BufferAttribute(new Float32Array(cat.length).fill(1), 1));
     const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
       uniforms: { ...this.common, uAlpha: { value: 0.38 } },
       vertexShader: FILL_VS, fragmentShader: FILL_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
     }));
     m.frustumCulled = false; m.renderOrder = 5;
+    m.userData.ranges = ranges;
     return m;
   }
 
   _lineMesh(items, { dash, lighten, alpha, width }) {
-    const L = this.lake, P = [], O = [], S = [], C = [], D = [], I = [];
+    const L = this.lake, P = [], O = [], S = [], C = [], D = [], I = [], ranges = [];
     let v = 0;
     const seg = (p, q, c, d0, d1) => {
       // corners p+n, p-n, q-n, q+n (sides 1,-1,1,-1: the normal at q is computed from q->p)
@@ -199,7 +270,7 @@ export class Heritage {
       for (const [a, b, sd, dd] of corners) { P.push(...a); O.push(...b); S.push(sd); C.push(c); D.push(dd); }
       I.push(v, v + 1, v + 2, v, v + 2, v + 3); v += 4;
     };
-    for (const it of items) for (const poly of it.poly) for (const ring of poly) {
+    const addRing = (ring, c) => {
       let dist = 0;
       const pts = [];
       for (let i = 0; i < ring.length; i++) {          // closed ring, densified every 10 m so it drapes
@@ -210,9 +281,14 @@ export class Heritage {
       pts.push(pts[0]);
       for (let i = 0; i < pts.length - 1; i++) {
         const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
-        seg(pts[i], pts[i + 1], it.c, dist, dist + l);
+        seg(pts[i], pts[i + 1], c, dist, dist + l);
         dist += l;
       }
+    };
+    for (const it of items) {      // vertex range of every item, so setSelection can flag its vertices
+      const v0 = v;
+      for (const poly of it.poly) for (const ring of poly) addRing(ring, it.c);
+      ranges.push([v0, v]);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
@@ -220,6 +296,7 @@ export class Heritage {
     g.setAttribute("side", new THREE.Float32BufferAttribute(S, 1));
     g.setAttribute("cat", new THREE.Float32BufferAttribute(C, 1));
     g.setAttribute("dist", new THREE.Float32BufferAttribute(D, 1));
+    g.setAttribute("sel", new THREE.Float32BufferAttribute(new Float32Array(C.length).fill(1), 1));
     g.setIndex(v > 65535 ? new THREE.Uint32BufferAttribute(I, 1) : new THREE.Uint16BufferAttribute(I, 1));
     const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
       uniforms: { ...this.common, uViewport: { value: new THREE.Vector2(1, 1) }, uWidth: { value: width },
@@ -228,6 +305,7 @@ export class Heritage {
     }));
     m.frustumCulled = false; m.renderOrder = 6;
     m.userData.baseWidth = width;
+    m.userData.ranges = ranges;
     return m;
   }
 
@@ -236,7 +314,40 @@ export class Heritage {
     this.common.uPremul.value = on ? 1 : 0;
     for (const m of [this.material, this.fill.material, this.siteLines.material, this.zoneLines.material]) { m.premultipliedAlpha = on; m.needsUpdate = true; }
   }
-  setCategories(on) { this.on = [...on]; this.common.uOn.value = this.on.map((v) => (v ? 1 : 0)); }
+  setCategories(on) { this.on = [...on]; this.common.uOn.value = this.on.map((v) => (v ? 1 : 0)); this.version++; }
+
+  /**
+   * Show only the sites selected by Askeladden ID (flags: Uint8Array per site), or all again (null).
+   * While a selection is on, the category switches do not apply (the caller passes all categories on).
+   */
+  setSelection(flags) {
+    this.filter = !!flags;
+    this.selected = flags ?? null;
+    this.common.uFilter.value = flags ? 1 : 0;
+    const per = (i) => (flags ? flags[i] : 1);
+    const pa = this.points.geometry.getAttribute("sel");
+    for (let i = 0; i < this.sites.length; i++) pa.array[i] = per(i);
+    pa.needsUpdate = true;
+    this.selLids = new Set(flags ? this.sites.filter((s) => flags[s.i]).map((s) => s.lid) : []);
+    const flag = (mesh, list) => {
+      const a = mesh.geometry.getAttribute("sel");
+      mesh.userData.ranges.forEach(([v0, v1], k) => a.array.fill(list(k), v0, v1));
+      a.needsUpdate = true;
+    };
+    flag(this.fill, per);
+    flag(this.siteLines, per);
+    flag(this.zoneLines, (k) => (!flags || this.selLids.has(this.zones[k].lid) ? 1 : 0));
+    this.version++;
+  }
+  /** Is the site drawn, given the category switches and the ID selection? */
+  shows(s) { return !!this.on[s.c] && (!this.filter || !!this.selected[s.i]); }
+  /** Categories (indices) that have at least one selected site; null without a selection. */
+  selectedCategories() {
+    if (!this.filter) return null;
+    const cats = new Set();
+    for (const s of this.sites) if (this.selected[s.i]) cats.add(s.c);
+    return cats;
+  }
   setSize(px) { this.material.uniforms.uSize.value = px; }
   /** Line widths in CSS px for the given viewport (and an optional scale, e.g. for poster export). */
   setViewport(w, h, scale = 1) {
@@ -263,7 +374,7 @@ export class Heritage {
     const F = this.model.F(state.t), v = new THREE.Vector3();
     let best = null, bd = maxPx * maxPx;
     for (const s of this.sites) {
-      if (!this.on[s.c]) continue;
+      if (!this.shows(s)) continue;
       v.set(s.X, s.Y, (s.h - this.lake.zBase - state.frame * s.dr * F / 1000) * state.exag).project(camera);
       if (v.z > 1) continue;
       const sx = (v.x + 1) / 2 * w, sy = (1 - v.y) / 2 * h;
@@ -272,7 +383,7 @@ export class Heritage {
     }
     if (best || !this.polyVisible) return best;
     for (const s of this.sites) {
-      if (!this.on[s.c]) continue;
+      if (!this.shows(s)) continue;
       for (const ring of s.rings) {
         const scr = ring.map(([X, Y, hh]) => { this._project(v, X, Y, hh, F, state, camera); return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * h, v.z]; });
         if (scr.some((p) => p[2] > 1)) continue;
@@ -287,15 +398,21 @@ export class Heritage {
     return null;
   }
 
+  /** Screen positions of the drawn sites for the ID labels (see anchorList). */
+  anchors(camera, w, h, state, opt) {
+    return anchorList(this.lake, this.model, this.sites.filter((s) => this.shows(s)), camera, w, h, state, opt);
+  }
+
   /** GeoJSON (EPSG:25833) for GIS / the poster ZIP: points, locality polygons or safety zones. */
   geojson(on, kind = "points") {
     const crs = { type: "name", properties: { name: "urn:ogc:def:crs:EPSG::25833" } };
     const props = (s) => ({ id: s.id, category: s.cat, name: s.name, type: s.art, dating: s.dating.join("; "), monuments: s.n, protection: s.vern, link: s.link });
     const mpoly = (poly) => ({ type: "MultiPolygon", coordinates: poly.map((p) => p.map((r) => [...r, r[0]])) });
     let features;
-    if (kind === "points") features = this.sites.filter((s) => on[s.c]).map((s) => ({ type: "Feature", geometry: { type: "Point", coordinates: [s.x, s.y] }, properties: props(s) }));
-    else if (kind === "polygons") features = this.sites.filter((s) => on[s.c] && s.poly?.length).map((s) => ({ type: "Feature", geometry: mpoly(s.poly), properties: props(s) }));
-    else features = this.zones.filter((z) => on[Math.max(0, KM_CATS.indexOf(z.cat))]).map((z) => ({ type: "Feature", geometry: mpoly(z.poly), properties: { site: z.lid, category: z.cat } }));
+    const sel = (s) => !this.filter || !!this.selected[s.i];      // the ID selection, if any, narrows the export too
+    if (kind === "points") features = this.sites.filter((s) => on[s.c] && sel(s)).map((s) => ({ type: "Feature", geometry: { type: "Point", coordinates: [s.x, s.y] }, properties: props(s) }));
+    else if (kind === "polygons") features = this.sites.filter((s) => on[s.c] && sel(s) && s.poly?.length).map((s) => ({ type: "Feature", geometry: mpoly(s.poly), properties: props(s) }));
+    else features = this.zones.filter((z) => on[Math.max(0, KM_CATS.indexOf(z.cat))] && (!this.filter || this.selLids.has(z.lid))).map((z) => ({ type: "Feature", geometry: mpoly(z.poly), properties: { site: z.lid, category: z.cat } }));
     return JSON.stringify({ type: "FeatureCollection", crs, features, source: this.data.source, licence: this.data.licence });
   }
 }

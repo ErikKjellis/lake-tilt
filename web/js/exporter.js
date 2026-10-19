@@ -9,6 +9,9 @@ import * as THREE from "three";
 import { makeZip } from "./zip.js";
 import { formatYear, T_NOW } from "./model.js";
 import { loadImage } from "./data.js";
+import { KM_COLOURS } from "./heritage.js";
+import { PT_COLOUR } from "./custompoints.js";
+import { placeLabels } from "./askeladden.js";
 
 const TILE = 2048;
 const WMS = "https://wms.geonorge.no/skwms1/wms.nib";
@@ -256,13 +259,31 @@ export class PosterExporter {
       for (const p of order) pctx.drawImage(p.small, 0, 0);
       pctx.globalAlpha = 1;
 
+      const km = opts.km, pts = opts.pts;
+      const gl = this.app.renderer.getContext();
+      const maxPt = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)?.[1] ?? 64;
+      const catFiles = km?.files?.filter((f) => f.kind !== "ids") ?? [], idFile = km?.files?.find((f) => f.kind === "ids");
+      const hSize = km ? Math.min(km.size, maxPt) : 0, pSize = pts?.points?.count ? Math.min(pts.size, maxPt) : 0;
+      // The heritage ID pills and the labels of the own points are laid out TOGETHER, and the markers of both layers keep
+      // their space, so that a label of one layer never covers a marker or a label of the other when the PNGs are stacked.
+      let plan = null;
+      if (idFile || (pSize && pts.labels)) {
+        const sources = [];
+        if (km?.heritage && catFiles.length) {
+          const Hg = km.heritage, on = Hg.on.map((_, c) => catFiles.some((f) => f.cat === c));
+          sources.push({
+            key: "ids", markerPx: hSize, colour: (s) => KM_COLOURS[s.c], text: idFile ? (s) => s.id : () => "",
+            anchors: (...a) => { const prev = [...Hg.on]; Hg.setCategories(on); try { return Hg.anchors(...a); } finally { Hg.setCategories(prev); } },
+          });
+        }
+        if (pSize) sources.push({ key: "pts", markerPx: pSize, boost: 10, colour: () => PT_COLOUR, text: pts.labels ? (s) => s.label : () => "", anchors: (...a) => pts.points.anchors(...a) });
+        plan = this.planLabels(cam, opts, sources);
+      }
+
       // ---------------------------------------------------------------- cultural heritage sites
-      const km = opts.km;
       if (km?.heritage && km.files.length) {
         const Hg = km.heritage, prevOn = [...Hg.on], prevSize = Hg.material.uniforms.uSize.value;
-        const gl = this.app.renderer.getContext();
-        const maxPt = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)?.[1] ?? 64;
-        const size = Math.min(km.size, maxPt);
+        const size = hSize;
         lake.update({ ...opts.baseState, t: T_NOW, regulated: false, frame: 0, overlay: 0, iso: false, exag: opts.exag });
         lake.water.visible = false; lake.terrain.visible = true; lake.terrainMat.colorWrite = false;
         Hg.points.visible = true; Hg.polygons.visible = !!km.polys;
@@ -272,7 +293,7 @@ export class PosterExporter {
         Hg.setScale(bbox ? (bbox[2] - bbox[0]) / opts.W : this.metresPerPx(cam, opts));
         const cats = Hg.on.map((_, c) => c);
         try {
-          for (const f of km.files) {
+          for (const f of catFiles) {
             progress?.(`${opts.L.ex_km}: ${f.label}`);
             await new Promise((r) => setTimeout(r, 0));
             Hg.setCategories(cats.map((c) => c === f.cat));
@@ -282,7 +303,19 @@ export class PosterExporter {
             if (isMap) files.push(...this.worldFiles(f.file, bbox, opts.W, opts.H, "pgw"));
             pctx.drawImage(cv, 0, 0, preview.width, preview.height);
           }
-          const on = cats.map((c) => km.files.some((f) => f.cat === c));
+          const on = cats.map((c) => catFiles.some((f) => f.cat === c));
+          if (idFile) {
+            progress?.(`${opts.L.ex_km}: ${idFile.label}`);
+            await new Promise((r) => setTimeout(r, 0));
+            Hg.setCategories(on);
+            const cv = document.createElement("canvas"); cv.width = opts.W; cv.height = opts.H;
+            const r = this.drawPlan(cv.getContext("2d"), plan, "ids");
+            km.idsPlaced = `${r.placed} of ${r.total}`;
+            progress?.(`${opts.L.ex_km}: ${idFile.label} (${km.idsPlaced})`);
+            files.push({ name: idFile.file, data: await blobBytes(await canvasBlob(cv, "image/png")) });
+            if (isMap) files.push(...this.worldFiles(idFile.file, bbox, opts.W, opts.H, "pgw"));
+            pctx.drawImage(cv, 0, 0, preview.width, preview.height);
+          }
           files.push({ name: "kulturminner.geojson", data: Hg.geojson(on) });
           if (km.polys) {
             files.push({ name: "kulturminner_lokaliteter.geojson", data: Hg.geojson(on, "polygons") });
@@ -290,9 +323,36 @@ export class PosterExporter {
           }
         } finally {
           Hg.setCategories(prevOn); Hg.setSize(prevSize); Hg.setPremultiplied(false);
+          Hg.points.visible = false; Hg.polygons.visible = false;      // (hideExtras restores them when the export ends)
           Hg.setViewport(this.app.renderer.domElement.clientWidth, this.app.renderer.domElement.clientHeight);
         }
         if (size < km.size) km.note = `marker size limited to ${size} px by the GPU`;
+      }
+
+      // ---------------------------------------------------------------- own points (typed-in coordinates)
+      if (pts?.points?.count) {
+        const Cp = pts.points, prevSize = Cp.size;
+        const size = pSize;
+        lake.update({ ...opts.baseState, t: T_NOW, regulated: false, frame: 0, overlay: 0, iso: false, exag: opts.exag });
+        lake.water.visible = false; lake.terrain.visible = true; lake.terrainMat.colorWrite = false;
+        Cp.points.visible = true; Cp.setSize(size); Cp.setPremultiplied(true);
+        try {
+          progress?.(`${opts.L.ex_pts}: ${pts.label}`);
+          await new Promise((r) => setTimeout(r, 0));
+          const cv = this.renderToCanvas(cam, opts.W, opts.H, opts.crop, { color: 0x000000, alpha: 0, unpremultiply: true }, Math.ceil(size / 2) + 2);
+          if (pts.labels) {
+            const r = this.drawPlan(cv.getContext("2d"), plan, "pts");
+            if (r.total) pts.placed = `${r.placed} of ${r.total}`;
+          }
+          files.push({ name: pts.file, data: await blobBytes(await canvasBlob(cv, "image/png")) });
+          if (isMap) files.push(...this.worldFiles(pts.file, bbox, opts.W, opts.H, "pgw"));
+          pctx.drawImage(cv, 0, 0, preview.width, preview.height);
+          files.push({ name: "egne_punkter.geojson", data: Cp.geojson() });
+          pts.shown = Cp.count; pts.outside = Cp.outside.length;
+          if (size < pts.size) pts.note = `marker size limited to ${size} px by the GPU`;
+        } finally {
+          Cp.setSize(prevSize); Cp.setPremultiplied(false); Cp.points.visible = false;
+        }
       }
 
       progress?.(opts.L.ex_p_zip);
@@ -310,6 +370,60 @@ export class PosterExporter {
     }
   }
 
+  /**
+   * The Askeladden IDs of the exported sites as a transparent PNG with the same camera and crop as the other
+   * layers (a pill with the category colour and the number, beside each marker, without overlaps). The text is
+   * about as large as the markers; the returned canvas has `placed` and `total` (sites that got no free spot
+   * have no label).
+   */
+  planLabels(camera, opts, sources) {
+    const { W, H, crop } = opts, s = W / crop.w;
+    const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace";
+    const meas = document.createElement("canvas").getContext("2d");
+    camera.setViewOffset(crop.vw * s, crop.vh * s, crop.x * s, crop.y * s, W, H);
+    camera.updateProjectionMatrix();
+    const state = { t: T_NOW, frame: 0, exag: opts.exag }, found = [];
+    try {
+      for (const src of sources) {
+        const fs = Math.max(12, Math.round(src.markerPx * 0.9)), h = Math.round(fs * 1.45), bar = Math.max(3, Math.round(fs * 0.28)), padX = Math.round(fs * 0.3);
+        meas.font = `600 ${fs}px ${mono}`;
+        for (const a of src.anchors(camera, W, H, state, { radiusPx: src.markerPx * 0.4, viewH: crop.vh * s })) {
+          const text = src.text(a.site);
+          found.push({ src, a, text, fs, h, bar, padX, w: text ? Math.ceil(meas.measureText(text).width) + bar + 2 * padX : 0 });
+        }
+      }
+    } finally {
+      camera.clearViewOffset();
+      camera.updateProjectionMatrix();
+    }
+    const items = found.map((f) => ({ x: f.a.sx, y: f.a.sy, w: f.w, h: f.h, r: f.src.markerPx / 2 + 2, prio: -f.a.z + (f.src.boost ?? 0) }));
+    const gap = Math.max(2, Math.round(Math.max(12, ...sources.map((x) => x.markerPx * 0.9)) * 0.25));
+    return { found, pos: placeLabels(items, W, H, { gap }), mono };
+  }
+
+  /** Draw the pills of one layer (`key`) from a plan into ctx (a W x H canvas). Returns {placed, total}: labels drawn / wanted. */
+  drawPlan(ctx, plan, key) {
+    ctx.textBaseline = "middle";
+    let placed = 0, total = 0;
+    plan.found.forEach((f, i) => {
+      if (f.src.key !== key || !f.text) return;
+      total++;
+      const p = plan.pos[i];
+      if (!p) return;
+      placed++;
+      const rad = Math.round(f.h * 0.2);
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(p.x, p.y, f.w, f.h, rad); ctx.clip();               // the pill; the colour bar is cut to its shape
+      ctx.fillStyle = "rgba(8,14,20,0.8)"; ctx.fillRect(p.x, p.y, f.w, f.h);
+      ctx.fillStyle = f.src.colour(f.a.site); ctx.fillRect(p.x, p.y, f.bar, f.h);
+      ctx.restore();
+      ctx.font = `600 ${f.fs}px ${plan.mono}`;
+      ctx.fillStyle = "#fff";
+      ctx.fillText(f.text, p.x + f.bar + f.padX, p.y + f.h / 2 + 0.5);
+    });
+    return { placed, total };
+  }
+
   worldFiles(name, bbox, W, H, ext) {
     const [x0, , x1, y1] = bbox, ys = (bbox[3] - bbox[1]) / H, xs = (x1 - x0) / W;
     const base = name.replace(/\.[^.]+$/, "");
@@ -319,8 +433,8 @@ export class PosterExporter {
 
   legendSvg(opts) {
     const kmRows = opts.km?.files ?? [];
-    const polyRow = kmRows.length && opts.km.polys ? 1 : 0;
-    const rowH = 34, w = 640, h = 44 + rowH * (opts.layers.length + kmRows.length + polyRow) + 30;
+    const polyRow = kmRows.length && opts.km.polys ? 1 : 0, ownRow = opts.pts?.points?.count ? 1 : 0;
+    const rowH = 34, w = 640, h = 44 + rowH * (opts.layers.length + kmRows.length + polyRow + ownRow) + 30;
     const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const rows = opts.layers.map((Ly, i) => {
       const y = 44 + i * rowH;
@@ -329,6 +443,10 @@ export class PosterExporter {
         `<text x="72" y="${y + 16}" font-size="15">${esc(Ly.label)}</text>`;
     }).join("\n") + "\n" + kmRows.map((f, j) => {
       const y = 44 + (opts.layers.length + j) * rowH, cx = 38, cy = y + 11, col = f.colour;
+      if (f.kind === "ids") {
+        return `<rect x="12" y="${y + 1}" width="54" height="20" rx="3" fill="#080e14"/><rect x="12" y="${y + 1}" width="5" height="20" fill="#adb5bd"/>`
+          + `<text x="21" y="${y + 15}" font-size="11" font-weight="600" fill="#fff" font-family="Consolas, monospace">171464</text><text x="76" y="${y + 16}" font-size="15">${esc(f.label)}</text>`;
+      }
       const shape = [
         `<circle cx="${cx}" cy="${cy}" r="9"/>`,
         `<polygon points="${cx},${cy - 10} ${cx + 10},${cy + 8} ${cx - 10},${cy + 8}"/>`,
@@ -342,6 +460,10 @@ export class PosterExporter {
       return `\n<rect x="17" y="${y + 1}" width="42" height="20" fill="#888" fill-opacity="0.35" stroke="#555" stroke-width="2"/>`
         + `<rect x="13" y="${y - 3}" width="50" height="28" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4 3"/>`
         + `<text x="72" y="${y + 16}" font-size="15">${esc(opts.L.ex_km_polys_legend)}</text>`;
+    })() : "") + (ownRow ? (() => {
+      const y = 44 + (opts.layers.length + kmRows.length + polyRow) * rowH, cx = 38, cy = y + 11;
+      return `\n<g fill="${PT_COLOUR}" stroke="#ffffff" stroke-width="2"><polygon points="${cx - 3.5},${cy - 10} ${cx + 3.5},${cy - 10} ${cx + 3.5},${cy - 3.5} ${cx + 10},${cy - 3.5} ${cx + 10},${cy + 3.5} ${cx + 3.5},${cy + 3.5} ${cx + 3.5},${cy + 10} ${cx - 3.5},${cy + 10} ${cx - 3.5},${cy + 3.5} ${cx - 10},${cy + 3.5} ${cx - 10},${cy - 3.5} ${cx - 3.5},${cy - 3.5}"/></g>`
+        + `<text x="72" y="${y + 16}" font-size="15">${esc(opts.pts.label)}</text>`;
     })() : "");
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="Segoe UI, Helvetica, Arial, sans-serif">
 <rect width="100%" height="100%" fill="#ffffff"/>
@@ -365,11 +487,20 @@ ${rows}
       "Layers (bottom to top):",
       ...(opts.background !== "none" ? [`  00  background: ${opts.background === "ortho" ? "aerial photo of today (Norge i bilder)" : opts.background}`] : []),
       ...opts.layers.map((Ly) => `  ${Ly.file}  ${Ly.label}  [${Ly.color}]`),
-      ...(opts.km?.files ?? []).map((f) => `  ${f.file}  ${f.label}  [${f.colour}]`),
+      ...(opts.km?.files ?? []).map((f) => (f.kind === "ids" ? `  ${f.file}  ${f.label}${opts.km.idsPlaced ? ` (labels placed: ${opts.km.idsPlaced})` : ""}` : `  ${f.file}  ${f.label}  [${f.colour}]`)),
+      ...(opts.km?.files?.length && opts.km.heritage.filter ? (() => {
+        const Hg = opts.km.heritage, cats = new Set(opts.km.files.filter((f) => f.kind !== "ids").map((f) => f.cat));
+        const n = Hg.sites.filter((s) => Hg.selected[s.i] && cats.has(s.c)).length;
+        return [`  Askeladden ID selection (IDs entered: ${opts.km.ids}): ${n} heritage ${n === 1 ? "site" : "sites"} exported, within the categories ticked in the export panel; the viewer's category switches do not apply.`];
+      })() : []),
       ...(opts.km?.files?.length ? ["  kulturminner.geojson  heritage sites as points (EPSG:25833) with ID, category, type, dating, protection and Kulturminnesøk link",
         ...(opts.km.polys ? ["  kulturminner_lokaliteter.geojson / kulturminner_sikringssoner.geojson  site outlines and safety zones (EPSG:25833)",
           "  The heritage PNGs include the site outlines (solid, translucent fill) and safety zones (dashed) under the markers."] : []),
         `  Heritage marker size ${opts.km.size} px${opts.km.note ? ` (${opts.km.note})` : ""}. Categories: Sami = KML §4.2 / Sami Iron Age / Sami monument type; Stone Age & Early Metal Age; Iron Age & Middle Ages; modern = after 1537; other = older than 100 years, uncertain or undated.`] : []),
+      ...(opts.pts?.points?.count ? [
+        `  ${opts.pts.file}  ${opts.pts.label}${opts.pts.placed ? ` (labels placed: ${opts.pts.placed})` : ""}  [${PT_COLOUR}]${opts.pts.note ? `  ${opts.pts.note}` : ""}`,
+        `  egne_punkter.geojson  ${opts.pts.shown} point${opts.pts.shown === 1 ? "" : "s"} typed in by the user (EPSG:25833; not from an open data source)${opts.pts.outside ? `; ${opts.pts.outside} outside the scene ${opts.pts.outside === 1 ? "is" : "are"} not included` : ""}`,
+      ] : []),
       "",
       `Water style: fill opacity ${Math.round(opts.fillAlpha * 100)} %, outline ${opts.outlinePx} px (inside the shoreline). ${meta.lakes[2]?.name ?? "Lake 3"} ${opts.useLake2 ? "included" : "excluded"}.`,
       "All images share the same camera, crop and pixel size, so they register exactly when stacked.",

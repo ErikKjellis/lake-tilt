@@ -19,6 +19,7 @@
 <div id="app">
   <canvas id="scene" aria-label="3D view of the lake"></canvas>
   <div id="labels"></div>
+  <div id="km-ids" aria-hidden="true"></div>
 
   <header id="titlecard" class="panel">
     <div class="tc-row">
@@ -96,7 +97,29 @@
           <label><input type="checkbox" data-kmcat="2" checked> <i class="sym s2"></i><span data-i18n="km_iron">Iron Age &amp; Middle Ages</span><em data-kmcount="2"></em></label>
           <label><input type="checkbox" data-kmcat="3" checked> <i class="sym s3"></i><span data-i18n="km_modern">Modern (after 1537)</span><em data-kmcount="3"></em></label>
           <label><input type="checkbox" data-kmcat="4"> <i class="sym s4"></i><span data-i18n="km_other">Other / undated</span><em data-kmcount="4"></em></label>
+          <div class="km-idsel">
+            <label for="km-ids-in" data-i18n="km_ids_label">Askeladden ID</label>
+            <div class="km-idrow">
+              <input id="km-ids-in" type="text" maxlength="2000" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="171464, 172105-1" aria-describedby="km-ids-status">
+              <button type="button" id="km-ids-zoom" class="icon" disabled data-i18n-title="km_ids_zoom" title="Zoom to the selection" aria-label="Zoom to the selection">⌖</button>
+              <button type="button" id="km-ids-clear" class="icon" data-i18n-title="km_ids_clear" title="Show all sites again" aria-label="Show all sites again" disabled>×</button>
+            </div>
+            <p class="fine" id="km-ids-status" role="status" aria-live="polite"></p>
+          </div>
+          <label><input type="checkbox" id="c-kmids"> <span data-i18n="km_idlabels">Show the IDs on the map</span></label>
           <p class="fine" data-i18n="km_polys">Zoom in to see the site outlines (solid) and safety zones (dashed).</p>
+        </div>
+        <label id="pts-toggle"><input type="checkbox" id="c-pts"> <i class="sym s5"></i><span data-i18n="c_pts">Own points (x, y)</span></label>
+        <div class="km-cats pts-box hidden" id="pts-box">
+          <p class="fine" id="pts-hint" data-i18n="pts_hint">For sites that the open data does not include, for example because access is restricted. One point per line: x y and an optional label. The coordinates stay in your browser.</p>
+          <label class="pts-crs"><span data-i18n="pts_crs">Coordinate system</span><select id="pts-crs"></select></label>
+          <textarea id="pts-in" rows="4" maxlength="80000" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="pts-hint pts-status" data-i18n-aria="pts_aria" aria-label="Own points"></textarea>
+          <div class="km-idrow">
+            <button type="button" id="pts-zoom" class="icon" disabled data-i18n-title="pts_zoom" title="Zoom to the points" aria-label="Zoom to the points">⌖</button>
+            <button type="button" id="pts-clear" class="icon" disabled data-i18n-title="pts_clear" title="Remove all points" aria-label="Remove all points">×</button>
+          </div>
+          <p class="fine" id="pts-status" role="status" aria-live="polite"></p>
+          <label><input type="checkbox" id="c-ptslabels" checked> <span data-i18n="pts_labels">Show the labels on the map</span></label>
         </div>
       </div>
     </section>
