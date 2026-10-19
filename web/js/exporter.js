@@ -9,6 +9,8 @@ import * as THREE from "three";
 import { makeZip } from "./zip.js";
 import { formatYear, T_NOW } from "./model.js";
 import { loadImage } from "./data.js";
+import { KM_COLOURS } from "./heritage.js";
+import { placeLabels } from "./askeladden.js";
 
 const TILE = 2048;
 const WMS = "https://wms.geonorge.no/skwms1/wms.nib";
@@ -271,8 +273,9 @@ export class PosterExporter {
         const lineScale = size / 10;
         Hg.setScale(bbox ? (bbox[2] - bbox[0]) / opts.W : this.metresPerPx(cam, opts));
         const cats = Hg.on.map((_, c) => c);
+        const catFiles = km.files.filter((f) => f.kind !== "ids"), idFile = km.files.find((f) => f.kind === "ids");
         try {
-          for (const f of km.files) {
+          for (const f of catFiles) {
             progress?.(`${opts.L.ex_km}: ${f.label}`);
             await new Promise((r) => setTimeout(r, 0));
             Hg.setCategories(cats.map((c) => c === f.cat));
@@ -282,7 +285,18 @@ export class PosterExporter {
             if (isMap) files.push(...this.worldFiles(f.file, bbox, opts.W, opts.H, "pgw"));
             pctx.drawImage(cv, 0, 0, preview.width, preview.height);
           }
-          const on = cats.map((c) => km.files.some((f) => f.cat === c));
+          const on = cats.map((c) => catFiles.some((f) => f.cat === c));
+          if (idFile) {
+            progress?.(`${opts.L.ex_km}: ${idFile.label}`);
+            await new Promise((r) => setTimeout(r, 0));
+            Hg.setCategories(on);
+            const cv = this.idLabels(cam, Hg, opts, size);
+            km.idsPlaced = `${cv.placed} of ${cv.total}`;
+            progress?.(`${opts.L.ex_km}: ${idFile.label} (${km.idsPlaced})`);
+            files.push({ name: idFile.file, data: await blobBytes(await canvasBlob(cv, "image/png")) });
+            if (isMap) files.push(...this.worldFiles(idFile.file, bbox, opts.W, opts.H, "pgw"));
+            pctx.drawImage(cv, 0, 0, preview.width, preview.height);
+          }
           files.push({ name: "kulturminner.geojson", data: Hg.geojson(on) });
           if (km.polys) {
             files.push({ name: "kulturminner_lokaliteter.geojson", data: Hg.geojson(on, "polygons") });
@@ -310,6 +324,46 @@ export class PosterExporter {
     }
   }
 
+  /**
+   * The Askeladden IDs of the exported sites as a transparent PNG with the same camera and crop as the other
+   * layers (a pill with the category colour and the number, beside each marker, without overlaps). The text is
+   * about as large as the markers; the returned canvas has `placed` and `total` (sites that got no free spot
+   * have no label).
+   */
+  idLabels(camera, Hg, opts, markerPx) {
+    const { W, H, crop } = opts;
+    const s = W / crop.w;
+    camera.setViewOffset(crop.vw * s, crop.vh * s, crop.x * s, crop.y * s, W, H);
+    camera.updateProjectionMatrix();
+    const anchors = Hg.anchors(camera, W, H, { t: T_NOW, frame: 0, exag: opts.exag }, { radiusPx: markerPx * 0.4, viewH: crop.vh * s });
+    camera.clearViewOffset();
+    camera.updateProjectionMatrix();
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const fs = Math.max(12, Math.round(markerPx * 0.9)), h = Math.round(fs * 1.45), bar = Math.max(3, Math.round(fs * 0.28)), padX = Math.round(fs * 0.3);
+    const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace";
+    ctx.font = `600 ${fs}px ${mono}`;
+    ctx.textBaseline = "middle";
+    const items = anchors.map((a) => ({ x: a.sx, y: a.sy, w: Math.ceil(ctx.measureText(a.site.id).width) + bar + 2 * padX, h, r: markerPx / 2 + 2, prio: -a.z }));
+    const pos = placeLabels(items, W, H, { gap: Math.max(2, Math.round(fs * 0.25)) });
+    let placed = 0;
+    anchors.forEach((a, i) => {
+      const p = pos[i];
+      if (!p) return;
+      placed++;
+      const { w } = items[i], rad = Math.round(h * 0.2);
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(p.x, p.y, w, h, rad); ctx.clip();                 // the pill; the colour bar is cut to its shape
+      ctx.fillStyle = "rgba(8,14,20,0.8)"; ctx.fillRect(p.x, p.y, w, h);
+      ctx.fillStyle = KM_COLOURS[a.site.c]; ctx.fillRect(p.x, p.y, bar, h);
+      ctx.restore();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(a.site.id, p.x + bar + padX, p.y + h / 2 + 0.5);
+    });
+    cv.placed = placed; cv.total = anchors.length;
+    return cv;
+  }
+
   worldFiles(name, bbox, W, H, ext) {
     const [x0, , x1, y1] = bbox, ys = (bbox[3] - bbox[1]) / H, xs = (x1 - x0) / W;
     const base = name.replace(/\.[^.]+$/, "");
@@ -329,6 +383,10 @@ export class PosterExporter {
         `<text x="72" y="${y + 16}" font-size="15">${esc(Ly.label)}</text>`;
     }).join("\n") + "\n" + kmRows.map((f, j) => {
       const y = 44 + (opts.layers.length + j) * rowH, cx = 38, cy = y + 11, col = f.colour;
+      if (f.kind === "ids") {
+        return `<rect x="12" y="${y + 1}" width="54" height="20" rx="3" fill="#080e14"/><rect x="12" y="${y + 1}" width="5" height="20" fill="#adb5bd"/>`
+          + `<text x="21" y="${y + 15}" font-size="11" font-weight="600" fill="#fff" font-family="Consolas, monospace">171464</text><text x="76" y="${y + 16}" font-size="15">${esc(f.label)}</text>`;
+      }
       const shape = [
         `<circle cx="${cx}" cy="${cy}" r="9"/>`,
         `<polygon points="${cx},${cy - 10} ${cx + 10},${cy + 8} ${cx - 10},${cy + 8}"/>`,
@@ -365,7 +423,12 @@ ${rows}
       "Layers (bottom to top):",
       ...(opts.background !== "none" ? [`  00  background: ${opts.background === "ortho" ? "aerial photo of today (Norge i bilder)" : opts.background}`] : []),
       ...opts.layers.map((Ly) => `  ${Ly.file}  ${Ly.label}  [${Ly.color}]`),
-      ...(opts.km?.files ?? []).map((f) => `  ${f.file}  ${f.label}  [${f.colour}]`),
+      ...(opts.km?.files ?? []).map((f) => (f.kind === "ids" ? `  ${f.file}  ${f.label}${opts.km.idsPlaced ? ` (labels placed: ${opts.km.idsPlaced})` : ""}` : `  ${f.file}  ${f.label}  [${f.colour}]`)),
+      ...(opts.km?.files?.length && opts.km.heritage.filter ? (() => {
+        const Hg = opts.km.heritage, cats = new Set(opts.km.files.filter((f) => f.kind !== "ids").map((f) => f.cat));
+        const n = Hg.sites.filter((s) => Hg.selected[s.i] && cats.has(s.c)).length;
+        return [`  Askeladden ID selection (IDs entered: ${opts.km.ids}): ${n} heritage ${n === 1 ? "site" : "sites"} exported, within the categories ticked in the export panel; the viewer's category switches do not apply.`];
+      })() : []),
       ...(opts.km?.files?.length ? ["  kulturminner.geojson  heritage sites as points (EPSG:25833) with ID, category, type, dating, protection and Kulturminnesøk link",
         ...(opts.km.polys ? ["  kulturminner_lokaliteter.geojson / kulturminner_sikringssoner.geojson  site outlines and safety zones (EPSG:25833)",
           "  The heritage PNGs include the site outlines (solid, translucent fill) and safety zones (dashed) under the markers."] : []),

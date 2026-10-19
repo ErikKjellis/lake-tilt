@@ -11,6 +11,8 @@ import { aboutHtml } from "./about.js";
 import { initExportUI } from "./exportui.js";
 import { Heritage, KM_CATS, KM_POLY_DIST } from "./heritage.js";
 import { LakePicker } from "./picker.js";
+import { parseIds, matchSites } from "./askeladden.js";
+import { KmLabels } from "./kmlabels.js";
 import { initGuide } from "./guide.js";
 
 const $ = (id) => document.getElementById(id);
@@ -21,7 +23,7 @@ const DATA = `data/${LAKE}`;
 
 const state = {
   t: T_NOW, exag: 3, frame: 0, overlay: 0, iso: true, labels: true, regulated: false, recon: true, border: true,
-  km: false, kmCats: [true, true, true, true, false],
+  km: false, kmCats: [true, true, true, true, false], kmIds: "", kmIdLabels: false,
   lang: (() => { const q = params.get("lang"); if (q === "no" || q === "en") return q; try { return localStorage.getItem("altevatn.lang") === "no" ? "no" : "en"; } catch { return "en"; } })(),
   basemap: "relief", playing: false, speed: 500,
 };
@@ -80,7 +82,7 @@ function makeControls(cam, map) {
   c.enableDamping = true;
   c.dampingFactor = 0.08;
   c.zoomToCursor = true;
-  c.maxTargetRadius = 0.6 * Math.max(meta.grid.nx, meta.grid.ny) * meta.grid.cell; // keep the target on the tile (origin = tile centre)
+  c.maxTargetRadius = 0.51 * Math.hypot(meta.grid.nx, meta.grid.ny) * meta.grid.cell; // keep the target on the tile, corners included (origin = tile centre)
   c.addEventListener("start", () => { flight = null; });   // the user takes over from a tour flight
   if (map) {
     c.enableRotate = false;
@@ -271,12 +273,17 @@ const pin = new THREE.Mesh(new THREE.CylinderGeometry(60, 60, 1, 12), new THREE.
 pin.rotation.x = Math.PI / 2; pin.visible = false; scene3.add(pin);
 
 // ---------------------------------------------------------------- cultural heritage sites
-let heritage = null;
+let heritage = null, kmLabels = null;
+const KM_MARKER_PX = 10;        // marker diameter in CSS px
 fetch(`${DATA}/kulturminner.json`).then((r) => (r.ok ? r.json() : null)).then((d) => {
   if (!d?.sites?.length) return;
   heritage = new Heritage(lake, model, d);
   heritage.setCategories(state.kmCats);
-  heritage.setSize(10 * renderer.getPixelRatio());
+  heritage.setSize(KM_MARKER_PX * renderer.getPixelRatio());
+  kmLabels = new KmLabels($("km-ids"));
+  // the example in the ID field: two IDs that exist in this scene
+  const ids = d.sites.map((s) => s.id);
+  kmIdIn.placeholder = [...new Set([ids[0], ids[Math.floor(ids.length / 2)]])].join(", ");
   scene3.add(heritage.points, heritage.polygons);
   heritage.setViewport(renderer.domElement.clientWidth, renderer.domElement.clientHeight);
   KM_CATS.forEach((c, i) => { const el = document.querySelector(`[data-kmcount="${i}"]`); if (el) el.textContent = `(${d.counts[c] ?? 0})`; });
@@ -285,8 +292,101 @@ fetch(`${DATA}/kulturminner.json`).then((r) => (r.ok ? r.json() : null)).then((d
 }).catch(() => {});
 $("c-km").addEventListener("change", (e) => { state.km = e.target.checked; $("km-cats").classList.toggle("hidden", !state.km); updateAttribution(); dirty = true; });
 for (const cb of document.querySelectorAll("[data-kmcat]")) cb.addEventListener("change", (e) => {
-  state.kmCats[Number(e.target.dataset.kmcat)] = e.target.checked; heritage?.setCategories(state.kmCats); dirty = true;
+  state.kmCats[Number(e.target.dataset.kmcat)] = e.target.checked; syncKmCategories(); dirty = true;
 });
+
+// Askeladden ID selection: only the sites with the typed IDs (separated by commas) are shown, whatever their
+// category. The IDs can also be written next to the markers.
+const kmIdIn = $("km-ids-in"), kmIdStatus = $("km-ids-status"), kmIdClear = $("km-ids-clear");
+let kmIdResult = null, kmIdTimer = 0;
+/** What is drawn: the ID selection if there is one (the category switches are then off), else the categories. */
+function syncKmCategories() {
+  if (!heritage) return;
+  const byId = heritage.filter;
+  heritage.setCategories(byId ? KM_CATS.map(() => true) : state.kmCats);
+  $("km-cats").classList.toggle("by-id", byId);
+  for (const cb of document.querySelectorAll("[data-kmcat]")) cb.disabled = byId;
+}
+/** A short, comma-separated list for the status line: the first few entries, each cut to 24 characters. */
+const shortList = (a, n = 5) => a.slice(0, n).map((x) => (x.length > 24 ? `${x.slice(0, 23)}…` : x)).join(", ") + (a.length > n ? ` … (+${a.length - n})` : "");
+function renderKmIdStatus() {
+  const L = S(), r = kmIdResult, parts = [];
+  let warn = false;
+  if (!r || !r.found) parts.push(L.km_ids_hint);
+  else if (!r.count) parts.push(L.km_ids_none);
+  else parts.push(L.km_ids_shown(r.count, r.found.length));
+  if (r?.count && r.missing.length) { parts.push(L.km_ids_missing(shortList(r.missing))); warn = true; }
+  if (r?.unreadable.length) { parts.push(L.km_ids_unreadable(shortList(r.unreadable))); warn = true; }
+  if (r?.found && !r.count) warn = true;
+  kmIdStatus.textContent = parts.join(" ");
+  kmIdStatus.classList.toggle("warn", warn);
+}
+function applyKmIds() {
+  clearTimeout(kmIdTimer);
+  state.kmIds = kmIdIn.value;
+  kmIdClear.disabled = !kmIdIn.value.trim();
+  if (!heritage) return;
+  const zoomBtn = $("km-ids-zoom");
+  const { ids, unreadable } = parseIds(kmIdIn.value);
+  if (ids.length) {
+    const m = matchSites(heritage.sites, ids);
+    heritage.setSelection(m.selected);
+    kmIdResult = { ...m, unreadable };
+  } else {
+    heritage.setSelection(null);            // nothing typed (or no number in it): all sites again
+    kmIdResult = unreadable.length ? { unreadable } : null;
+  }
+  zoomBtn.disabled = !heritage.filter;
+  syncKmCategories();
+  renderKmIdStatus();
+  dirty = true;
+}
+kmIdIn.addEventListener("input", () => { kmIdClear.disabled = !kmIdIn.value.trim(); clearTimeout(kmIdTimer); kmIdTimer = setTimeout(applyKmIds, 250); });
+kmIdIn.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); applyKmIds(); zoomToKmSelection(); }
+});
+kmIdClear.addEventListener("click", () => { kmIdIn.value = ""; applyKmIds(); kmIdIn.focus(); });
+$("km-ids-zoom").addEventListener("click", () => { applyKmIds(); zoomToKmSelection(); });
+$("c-kmids").addEventListener("change", (e) => { state.kmIdLabels = e.target.checked; kmLabels?.clear(); dirty = true; });
+renderKmIdStatus();
+
+/** Fly to the sites selected by ID (the camera keeps its direction; in the map view it only pans and zooms). */
+function zoomToKmSelection() {
+  if (!heritage?.filter) return;
+  zoomToSites(heritage.sites.filter((s) => heritage.selected[s.i]));
+}
+function zoomToSites(list) {
+  if (!list.length || exporting) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of list) { x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); y0 = Math.min(y0, s.y); y1 = Math.max(y1, s.y); }
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const [tx, ty] = lake.toLocal(cx, cy);
+  if (isMapView()) {
+    // fit the bounding box into the window; the zoom floor of the controls is lowered if the box is wider than it allows
+    const visH = orthoCam.top - orthoCam.bottom, visW = orthoCam.right - orthoCam.left;
+    const want = Math.min(visW / (Math.max(x1 - x0, 300) * 1.25), visH / (Math.max(y1 - y0, 300) * 1.25));
+    controls.minZoom = Math.min(controls.minZoom, want);
+    orthoCam.zoom = THREE.MathUtils.clamp(want, controls.minZoom, controls.maxZoom);
+    orthoCam.position.set(tx, ty, orthoCam.position.z);
+    controls.target.set(tx, ty, 0);
+    orthoCam.updateProjectionMatrix(); controls.update(); dirty = true;
+    return;
+  }
+  // perspective: the camera keeps its direction; the distance is chosen so that the bounding sphere of the sites
+  // (heights as drawn: exaggerated, and tilted in the "water flat" frame) fits the narrower side of the window
+  const F = model.F(state.t), zOf = (s) => (s.h - lake.zBase - state.frame * s.dr * F / 1000) * state.exag;
+  let zLo = Infinity, zHi = -Infinity;
+  for (const s of list) { const z = zOf(s); zLo = Math.min(zLo, z); zHi = Math.max(zHi, z); }
+  const tz = (zLo + zHi) / 2;
+  let R = 0;
+  for (const s of list) { const [sx, sy] = lake.toLocal(s.x, s.y); R = Math.max(R, Math.hypot(sx - tx, sy - ty, zOf(s) - tz)); }
+  const vHalf = THREE.MathUtils.degToRad(perspCam.fov / 2), hHalf = Math.atan(Math.tan(vHalf) * perspCam.aspect);
+  const dist = THREE.MathUtils.clamp((R * 1.2 + 150) / Math.sin(Math.min(vHalf, hHalf)), 1800, controls.maxDistance);
+  const off = camera.position.clone().sub(controls.target);
+  const az = THREE.MathUtils.radToDeg(Math.atan2(off.x, off.y));
+  const el = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(off.z / (off.length() || 1), -1, 1))), 25, 70);
+  setView({ target: [cx, cy, tz], az, el, dist }, 1200);
+}
 // hover: ID, name and dating; click: a popup with the details and a link to Kulturminnesøk,
 // which stays until it is closed, the map is clicked or Escape is pressed
 const kmTip = $("km-tip"), kmPop = $("km-pop");
@@ -342,7 +442,7 @@ function closeKmPopup() { kmOpen = null; kmPop.classList.add("hidden"); }
 const kmV = new THREE.Vector3();
 function placeKmPopup() {
   if (!kmOpen) return;
-  if (!state.km || !heritage?.on[kmOpen.c]) { closeKmPopup(); return; }
+  if (!state.km || !heritage?.shows(kmOpen)) { closeKmPopup(); return; }
   const s = kmOpen, F = model.F(state.t);
   kmV.set(s.X, s.Y, (s.h - lake.zBase - state.frame * s.dr * F / 1000) * state.exag).project(camera);
   const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
@@ -468,7 +568,7 @@ function setLang(lang) {
   state.lang = lang;
   try { localStorage.setItem("altevatn.lang", lang); } catch { /* private mode */ }
   for (const x of document.querySelectorAll(".lang button")) x.classList.toggle("on", x.dataset.lang === lang);
-  applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso(); picker.relabel();
+  applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso(); picker.relabel(); renderKmIdStatus();
   for (const o of labels) o.element.innerHTML = labelHtml(o.userData.p);
   if (tour.active) showStep(tour.i, false);
   exportUI?.rerender();
@@ -912,6 +1012,8 @@ function frame(now) {
     heritage.setVisible(state.km, d < KM_POLY_DIST);
     heritage.setScale(2 * d * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2)) / renderer.domElement.clientHeight);
     placeKmPopup();
+    if (state.km && state.kmIdLabels) kmLabels?.update(heritage, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state, KM_MARKER_PX);
+    else kmLabels?.clear();
   }
   lake.waterMat.uniforms.uCamPos.value.copy(camera.position);
   lake.waterMat.uniforms.uTime.value = now / 1000;
@@ -945,6 +1047,7 @@ exportUI = initExportUI({
   setExporting: (on) => { exporting = on; controls.enabled = !on; if (!on) { dirty = true; labelsDirty = true; } },
   hideExtras: (on) => {
     if (on) { closeKmPopup(); kmTip.classList.add("hidden"); }
+    $("km-ids").style.display = on ? "none" : "";
     for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin, heritage?.points, heritage?.polygons].filter(Boolean)) {
       if (on) { m.userData.wasVisible = m.visible; m.visible = false; } else if (m.userData.wasVisible !== undefined) m.visible = m.userData.wasVisible;
     }

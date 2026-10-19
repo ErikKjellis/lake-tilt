@@ -16,7 +16,7 @@ export function initExportUI(app) {
     open: false, mode: "persp", aspect: "aland", long: 6000, background: "ortho",
     times: "10000, 8000, 6000, 4000, 2000", natural: false, lrv: true, hrv: true, useLake2: true,
     fill: 0.85, outline: 3, colours: {},
-    km: false, kmCats: [true, true, true, true, false], kmPolys: true, kmSize: 26,
+    km: false, kmCats: [true, true, true, true, false], kmPolys: true, kmSize: 26, kmIds: false,
   };
 
   // ------------------------------------------------------------------ DOM
@@ -64,8 +64,10 @@ export function initExportUI(app) {
         <div class="km-cats ${ui.km ? "" : "hidden"}" id="ex-km-cats">
           ${KM_CATS.map((c, i) => `<label><input type="checkbox" data-exkm="${i}" ${ui.kmCats[i] ? "checked" : ""}> <i class="sym s${i}"></i>${L[`km_${c}`]}</label>`).join("")}
           <label><input type="checkbox" id="ex-kmpolys" ${ui.kmPolys ? "checked" : ""}> ${L.ex_km_polys}</label>
+          <label><input type="checkbox" id="ex-kmids" ${ui.kmIds ? "checked" : ""}> ${L.ex_km_idlabels}</label>
         </div>
       </div>
+      ${app.getHeritage()?.filter ? `<p class="fine">${selectedSites() ? L.ex_km_ids_note(selectedSites()) : L.km_ids_none}</p>` : ""}
       <label class="row"><span>${L.ex_km_size}</span><output id="ex-kmsize-o">${ui.kmSize} px</output></label>
       <input type="range" id="ex-kmsize" min="8" max="96" step="2" value="${ui.kmSize}">
       <p class="fine">${L.ex_km_hint}</p>` : ""}
@@ -113,16 +115,25 @@ export function initExportUI(app) {
   function kmFiles(offset) {
     if (!ui.km || !app.getHeritage()) return [];
     const L = S(), stems = ["samiske", "steinalder_tidlig_metalltid", "jernalder_middelalder", "nyere_tid", "annet_udatert"];
-    return KM_CATS.map((_, c) => c).filter((c) => ui.kmCats[c]).map((c, j) => ({
+    const withSites = app.getHeritage().selectedCategories();      // an ID selection leaves out the categories without a selected site
+    const files = KM_CATS.map((_, c) => c).filter((c) => ui.kmCats[c] && (!withSites || withSites.has(c))).map((c, j) => ({
       cat: c, colour: KM_COLOURS[c], label: L.ex_lab_km(L[`km_${KM_CATS[c]}`]),
       file: `${String(offset + j + 1).padStart(2, "0")}_kulturminner_${stems[c]}.png`,
     }));
+    if (ui.kmIds && files.length) files.push({ kind: "ids", cat: -1, colour: "#ffffff", label: L.ex_lab_km_ids, file: `${String(offset + files.length + 1).padStart(2, "0")}_kulturminner_askeladden_id.png` });
+    return files;
+  }
+
+  /** Number of sites an Askeladden ID selection leaves, or 0 without a selection. */
+  function selectedSites() {
+    const hg = app.getHeritage();
+    return hg?.filter ? hg.selected.reduce((n, v) => n + v, 0) : 0;
   }
 
   function renderLayers() {
     const box = $("ex-layers");
     box.innerHTML = layers().map((Ly) => `<li><input type="color" value="${Ly.colour}" data-key="${Ly.key}" aria-label="colour"><span>${Ly.label}</span></li>`).join("")
-      + kmFiles(layers().length).map((f) => `<li><i class="sym s${f.cat}" style="margin:0 9px 0 9px"></i><span>${f.label}</span></li>`).join("");
+      + kmFiles(layers().length).map((f) => `<li>${f.kind === "ids" ? `<span class="ex-idpill">ID</span>` : `<i class="sym s${f.cat}" style="margin:0 9px 0 9px"></i>`}<span>${f.label}</span></li>`).join("");
     for (const inp of box.querySelectorAll("input[type=color]")) inp.addEventListener("input", (e) => { ui.colours[e.target.dataset.key] = e.target.value; });
   }
 
@@ -143,6 +154,7 @@ export function initExportUI(app) {
       $("ex-km").addEventListener("change", (e) => { ui.km = e.target.checked; $("ex-km-cats").classList.toggle("hidden", !ui.km); renderLayers(); });
       for (const cb of panel.querySelectorAll("[data-exkm]")) cb.addEventListener("change", (e) => { ui.kmCats[Number(e.target.dataset.exkm)] = e.target.checked; renderLayers(); });
       $("ex-kmpolys").addEventListener("change", (e) => { ui.kmPolys = e.target.checked; });
+      $("ex-kmids").addEventListener("change", (e) => { ui.kmIds = e.target.checked; renderLayers(); });
       $("ex-kmsize").addEventListener("input", (e) => { ui.kmSize = Number(e.target.value); $("ex-kmsize-o").textContent = `${ui.kmSize} px`; });
     }
     $("ex-fill").addEventListener("input", (e) => { ui.fill = Number(e.target.value); $("ex-fill-o").textContent = `${Math.round(ui.fill * 100)} %`; });
@@ -249,7 +261,7 @@ export function initExportUI(app) {
         fillAlpha: ui.fill, outlinePx: ui.outline, background: ui.background, useLake2: ui.useLake2,
         exag: mode === "map" ? 1 : state().exag, baseState: { ...state() }, lang: state().lang,
         baseTextures: app.baseTex, viewCode: viewCode(), L,
-        km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize, polys: ui.kmPolys } : null,
+        km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize, polys: ui.kmPolys, ids: app.state.kmIds } : null,
       }, (msg) => { $("ex-progress").textContent = msg; });
       const a = document.createElement("a");
       const day = new Date().toISOString().slice(0, 10);
@@ -273,7 +285,9 @@ export function initExportUI(app) {
     app.onOpen();
     ui.open = true;
     ui.mode = app.isMapView() ? "map" : "persp";
-    ui.km = app.state.km; ui.kmCats = [...app.state.kmCats];
+    // an Askeladden ID selection ignores the category switches, so every category starts on in the export too
+    ui.km = app.state.km; ui.kmCats = app.getHeritage()?.filter ? KM_CATS.map(() => true) : [...app.state.kmCats];
+    ui.kmIds = app.state.kmIdLabels;
     render();
     panel.classList.remove("hidden"); frame.classList.remove("hidden");
     document.getElementById("app").classList.add("exporting");
