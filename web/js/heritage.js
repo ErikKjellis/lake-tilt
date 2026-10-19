@@ -9,12 +9,10 @@ export const KM_COLOURS = ["#e63946", "#f4a261", "#2a9d8f", "#9d4edd", "#adb5bd"
 export const KM_SHAPES = ["circle", "triangle", "hexagon", "square", "diamond"];
 export const KM_POLY_DIST = 8000;   // view distance (m) below which polygons and safety zones are shown
 
-const RATE = /* glsl */ `
+/** Shader chunk shared with the own-points layer: the uplift-rate surface and the marker position (tilted frame, exaggeration). */
+export const RATE_CORE = /* glsl */ `
 uniform float uRateC[6]; uniform vec2 uRateCentre; uniform float uRref;
 uniform float uExag, uZBase, uFrame, uF;
-uniform float uOn[5];
-uniform float uFilter;      // 1: only the features selected by Askeladden ID (sel = 1), whatever their category
-attribute float sel;
 float rateAt(vec2 p){ vec2 q=(p-uRateCentre)/1000.0; return uRateC[0]+uRateC[1]*q.x+uRateC[2]*q.y+uRateC[3]*q.x*q.x+uRateC[4]*q.y*q.y+uRateC[5]*q.x*q.y; }
 vec4 viewPos(vec3 p, float k) {
   float z = p.z - uFrame * (rateAt(p.xy) - uRref) * uF / 1000.0;
@@ -24,6 +22,13 @@ vec4 viewPos(vec3 p, float k) {
   if (projectionMatrix[3][3] > 0.5) mv.z += (1.0 - k) * abs(mv.z); else mv.xyz *= k;
   return mv;
 }
+`;
+
+const RATE = /* glsl */ `
+${RATE_CORE}
+uniform float uOn[5];
+uniform float uFilter;      // 1: only the features selected by Askeladden ID (sel = 1), whatever their category
+attribute float sel;
 float catOn(float c) { int i = int(c + 0.5); return uOn[i]; }
 bool shown(float c, float s) { return catOn(c) > 0.5 && (uFilter < 0.5 || s > 0.5); }
 `;
@@ -118,6 +123,55 @@ function subdivide(tri, maxLen, out) {
   if (m === lab) { const d = mid(a, b); subdivide([a, d, c], maxLen, out); subdivide([d, b, c], maxLen, out); }
   else if (m === lbc) { const d = mid(b, c); subdivide([a, b, d], maxLen, out); subdivide([a, d, c], maxLen, out); }
   else { const d = mid(c, a); subdivide([a, b, d], maxLen, out); subdivide([d, b, c], maxLen, out); }
+}
+
+/**
+ * Screen positions of marker items for the ID / name labels: [{site, sx, sy, z}] in CSS px (or output px when the
+ * camera has a view offset for an export). Items behind the camera or outside the view are left out, and so are
+ * items hidden behind terrain (perspective camera; the map view looks straight down).
+ * @param {{X: number, Y: number, h: number, dr: number}[]} items local scene coordinates, height, uplift-rate offset
+ * @param {{margin?: number, radiusPx?: number, viewH?: number}} [opt] margin: keep items this far outside the
+ *   view; radiusPx: radius of the marker symbol (an item is hidden only when even its upper edge is covered);
+ *   viewH: height in px of the whole view when `h` is only a crop of it (poster export)
+ */
+export function anchorList(lake, model, items, camera, w, h, state, { margin = 0, radiusPx = 4, viewH = h } = {}) {
+  const F = model.F(state.t), v = new THREE.Vector3(), out = [];
+  const persp = camera.isPerspectiveCamera;
+  camera.updateMatrixWorld();
+  const cam = persp ? camera.getWorldPosition(new THREE.Vector3()) : null;
+  const pxR = persp ? radiusPx * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / viewH : 0;   // view angle of the symbol radius
+  for (const s of items) {
+    const z = (s.h - lake.zBase - state.frame * s.dr * F / 1000) * state.exag;
+    v.set(s.X, s.Y, z).project(camera);
+    if (v.z > 1 || v.z < -1) continue;
+    const sx = (v.x + 1) / 2 * w, sy = (1 - v.y) / 2 * h;
+    if (sx < -margin || sx > w + margin || sy < -margin || sy > h + margin) continue;
+    if (persp && terrainHidden(lake, model, cam, s.X, s.Y, z, state, F, pxR)) continue;
+    out.push({ site: s, sx, sy, z: v.z });
+  }
+  return out;
+}
+
+/**
+ * Is the point (local scene coordinates, already scaled in z) hidden from the camera by the terrain?
+ * The marker is drawn at 99.6 % of its view ray (viewPos), so the sight line is followed to there. The
+ * tolerance is the vertical equivalent of that bias, the mesh interpolation (about one exaggerated metre)
+ * and the symbol's own radius: a marker whose upper edge still peeks out over the ridge keeps its label.
+ * pxR is the view angle of the symbol radius in radians.
+ */
+export function terrainHidden(lake, model, cam, X, Y, Z, state, F, pxR) {
+  const dx = X - cam.x, dy = Y - cam.y, dz = Z - cam.z;
+  const dist = Math.hypot(dx, dy, dz);
+  const steps = Math.min(300, Math.max(8, Math.ceil(dist / 80)));
+  const base = state.exag + 0.004 * Math.abs(dz);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (t > 0.996) break;
+    const ux = cam.x + dx * t + lake.ox, uy = cam.y + dy * t + lake.oy;
+    const terr = (lake.heightAtUtm(ux, uy) - lake.zBase - state.frame * model.dr(ux, uy) * F / 1000) * state.exag;
+    if (terr > cam.z + dz * t + base + pxR * dist * t) return true;
+  }
+  return false;
 }
 
 export class Heritage {
@@ -344,53 +398,9 @@ export class Heritage {
     return null;
   }
 
-  /**
-   * Screen positions of the drawn sites for the ID labels: [{site, sx, sy, z}] in CSS px (or output px when the
-   * camera has a view offset for an export). Sites behind the camera or outside the view are left out, and so
-   * are sites hidden behind terrain (perspective camera; the map view looks straight down).
-   * @param {{margin?: number, radiusPx?: number, viewH?: number}} [opt] margin: keep sites this far outside the
-   *   view; radiusPx: radius of the marker symbol (a site is hidden only when even its upper edge is covered);
-   *   viewH: height in px of the whole view when `h` is only a crop of it (poster export)
-   */
-  anchors(camera, w, h, state, { margin = 0, radiusPx = 4, viewH = h } = {}) {
-    const F = this.model.F(state.t), L = this.lake, v = new THREE.Vector3(), out = [];
-    const persp = camera.isPerspectiveCamera;
-    camera.updateMatrixWorld();
-    const cam = persp ? camera.getWorldPosition(new THREE.Vector3()) : null;
-    const pxR = persp ? radiusPx * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / viewH : 0;   // view angle of the symbol radius
-    for (const s of this.sites) {
-      if (!this.shows(s)) continue;
-      const z = (s.h - L.zBase - state.frame * s.dr * F / 1000) * state.exag;
-      v.set(s.X, s.Y, z).project(camera);
-      if (v.z > 1 || v.z < -1) continue;
-      const sx = (v.x + 1) / 2 * w, sy = (1 - v.y) / 2 * h;
-      if (sx < -margin || sx > w + margin || sy < -margin || sy > h + margin) continue;
-      if (persp && this._hidden(cam, s.X, s.Y, z, state, F, pxR)) continue;
-      out.push({ site: s, sx, sy, z: v.z });
-    }
-    return out;
-  }
-
-  /**
-   * Is the point (local scene coordinates, already scaled in z) hidden from the camera by the terrain?
-   * The marker is drawn at 99.6 % of its view ray (viewPos), so the sight line is followed to there. The
-   * tolerance is the vertical equivalent of that bias, the mesh interpolation (about one exaggerated metre)
-   * and the symbol's own radius: a marker whose upper edge still peeks out over the ridge keeps its label.
-   * pxR is the view angle of the symbol radius in radians.
-   */
-  _hidden(cam, X, Y, Z, state, F, pxR) {
-    const L = this.lake, dx = X - cam.x, dy = Y - cam.y, dz = Z - cam.z;
-    const dist = Math.hypot(dx, dy, dz);
-    const steps = Math.min(300, Math.max(8, Math.ceil(dist / 80)));
-    const base = state.exag + 0.004 * Math.abs(dz);
-    for (let i = 1; i < steps; i++) {
-      const t = i / steps;
-      if (t > 0.996) break;
-      const ux = cam.x + dx * t + L.ox, uy = cam.y + dy * t + L.oy;
-      const terr = (L.heightAtUtm(ux, uy) - L.zBase - state.frame * this.model.dr(ux, uy) * F / 1000) * state.exag;
-      if (terr > cam.z + dz * t + base + pxR * dist * t) return true;
-    }
-    return false;
+  /** Screen positions of the drawn sites for the ID labels (see anchorList). */
+  anchors(camera, w, h, state, opt) {
+    return anchorList(this.lake, this.model, this.sites.filter((s) => this.shows(s)), camera, w, h, state, opt);
   }
 
   /** GeoJSON (EPSG:25833) for GIS / the poster ZIP: points, locality polygons or safety zones. */

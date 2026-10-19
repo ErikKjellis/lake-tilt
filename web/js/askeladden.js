@@ -64,7 +64,8 @@ const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h 
  * Greedy label placement: every label goes beside its marker (right, left, above, below, in that order) at the
  * first position where it covers neither a label placed before nor any marker, and stays inside the view.
  * @param {{x: number, y: number, w: number, h: number, r: number, prio?: number}[]} items marker centre (px),
- *   label size (px), marker radius (px) and priority (higher first; ties keep the input order)
+ *   label size (px; w = 0: no label, the marker is only an obstacle), marker radius (px) and priority (higher
+ *   first; ties keep the input order)
  * @param {number} W view width (px)
  * @param {number} H view height (px)
  * @param {{gap?: number, max?: number, margin?: number}} [opt]
@@ -89,6 +90,7 @@ export function placeLabels(items, W, H, { gap = 3, max = Infinity, margin = 2 }
   for (const i of order) {
     if (placed >= max) break;
     const { x, y, w, h, r } = items[i];
+    if (!(w > 0)) continue;                      // a marker without a label: only an obstacle for the others
     const spots = [[x + r + gap, y - h / 2], [x - r - gap - w, y - h / 2], [x - w / 2, y - r - gap - h], [x - w / 2, y + r + gap]];
     for (const [lx, ly] of spots) {
       if (lx < margin || ly < margin || lx + w > W - margin || ly + h > H - margin) continue;

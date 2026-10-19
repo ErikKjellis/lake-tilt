@@ -41,7 +41,7 @@ button:hover { background: rgba(255, 255, 255, 0.12); }
 button.primary { background: rgba(89, 195, 214, 0.18); border-color: rgba(89, 195, 214, 0.5); }
 button.primary:hover { background: rgba(89, 195, 214, 0.3); }
 button.icon { width: 28px; height: 28px; padding: 0; line-height: 26px; text-align: center; }
-button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: .45; cursor: default; }
 kbd { font-family: var(--mono); font-size: 11.5px; padding: 0 5px; border: 1px solid rgba(160, 190, 210, 0.35); border-bottom-width: 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); color: var(--text); white-space: nowrap; }
 
@@ -369,12 +369,18 @@ details.model[open] summary { margin-bottom: 4px; }
 .km-idsel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 6px 0 4px; min-width: 0; }
 .km-idsel > label { font-size: 12.5px; color: var(--text); }
 .km-idrow { display: flex; gap: 4px; align-items: stretch; }
+.pts-box textarea, .pts-box select { width: 100%; box-sizing: border-box; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; color: var(--text); font: 12.5px var(--mono); }
+.pts-box textarea { resize: vertical; min-height: 4.5em; }
+.pts-box textarea::placeholder { color: var(--muted); opacity: 0.8; }
+.pts-box .pts-crs { display: grid; gap: 3px; font-size: 12.5px; }
+.pts-box .km-idrow { justify-content: flex-end; }
+.sym.s5 { background: #ffd60a; clip-path: polygon(36% 0, 64% 0, 64% 36%, 100% 36%, 100% 64%, 64% 64%, 64% 100%, 36% 100%, 36% 64%, 0 64%, 0 36%, 36% 36%); box-shadow: none; }
 .km-idrow input { flex: 1 1 auto; min-width: 0; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; color: var(--text); font: 12.5px var(--mono); }
 .km-idrow input::placeholder { color: var(--muted); opacity: 0.8; }
 .km-idrow button.icon { flex: none; width: 30px; height: auto; display: grid; place-items: center; }
 .km-idrow button:disabled { opacity: 0.4; cursor: default; }
 .km-idsel .fine { margin: 0; }
-.km-idsel .fine.warn { color: #ffb38a; }
+.km-idsel .fine.warn, .pts-box .fine.warn { color: #ffb38a; }
 .km-cats.by-id > label:has([data-kmcat]) { opacity: 0.45; cursor: default; }
-#km-ids-zoom { font-size: 17px; line-height: 1; }
+#km-ids-zoom, #pts-zoom { font-size: 17px; line-height: 1; }
 .ex-idpill { display: inline-block; margin: 0 9px 0 6px; padding: 0 4px; border-left: 3px solid #adb5bd; border-radius: 3px; background: #080e14; color: #fff; font: 600 10px/15px var(--mono); }

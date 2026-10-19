@@ -16,7 +16,7 @@ export function initExportUI(app) {
     open: false, mode: "persp", aspect: "aland", long: 6000, background: "ortho",
     times: "10000, 8000, 6000, 4000, 2000", natural: false, lrv: true, hrv: true, useLake2: true,
     fill: 0.85, outline: 3, colours: {},
-    km: false, kmCats: [true, true, true, true, false], kmPolys: true, kmSize: 26, kmIds: false,
+    km: false, kmCats: [true, true, true, true, false], kmPolys: true, kmSize: 26, kmIds: false, pts: false, ptsLabels: true, ptsSize: 30,
   };
 
   // ------------------------------------------------------------------ DOM
@@ -71,6 +71,13 @@ export function initExportUI(app) {
       <label class="row"><span>${L.ex_km_size}</span><output id="ex-kmsize-o">${ui.kmSize} px</output></label>
       <input type="range" id="ex-kmsize" min="8" max="96" step="2" value="${ui.kmSize}">
       <p class="fine">${L.ex_km_hint}</p>` : ""}
+      ${app.getPoints()?.count ? `<h2 class="ex-sub">${L.ex_pts}</h2>
+      <div class="checks">
+        <label><input type="checkbox" id="ex-pts" ${ui.pts ? "checked" : ""}> <i class="sym s5"></i>${L.ex_pts_layer(app.getPoints().count)}</label>
+        <label><input type="checkbox" id="ex-ptslabels" ${ui.ptsLabels ? "checked" : ""}> ${L.ex_pts_labels}</label>
+      </div>
+      <label class="row"><span>${L.ex_km_size}</span><output id="ex-ptssize-o">${ui.ptsSize} px</output></label>
+      <input type="range" id="ex-ptssize" min="8" max="96" step="2" value="${ui.ptsSize}">` : ""}
       <h2 class="ex-sub">${L.ex_layers}</h2>
       <ol class="ex-layers" id="ex-layers"></ol>
       <label class="row"><span>${L.ex_fill}</span><output id="ex-fill-o">${Math.round(ui.fill * 100)} %</output></label>
@@ -124,6 +131,12 @@ export function initExportUI(app) {
     return files;
   }
 
+  /** The own-points layer (typed-in coordinates), or null when it is off or there are no points. */
+  function ptsFile(offset) {
+    if (!ui.pts || !app.getPoints()?.count) return null;
+    return { file: `${String(offset + 1).padStart(2, "0")}_egne_punkter.png`, label: S().ex_lab_pts };
+  }
+
   /** Number of sites an Askeladden ID selection leaves, or 0 without a selection. */
   function selectedSites() {
     const hg = app.getHeritage();
@@ -133,7 +146,8 @@ export function initExportUI(app) {
   function renderLayers() {
     const box = $("ex-layers");
     box.innerHTML = layers().map((Ly) => `<li><input type="color" value="${Ly.colour}" data-key="${Ly.key}" aria-label="colour"><span>${Ly.label}</span></li>`).join("")
-      + kmFiles(layers().length).map((f) => `<li>${f.kind === "ids" ? `<span class="ex-idpill">ID</span>` : `<i class="sym s${f.cat}" style="margin:0 9px 0 9px"></i>`}<span>${f.label}</span></li>`).join("");
+      + kmFiles(layers().length).map((f) => `<li>${f.kind === "ids" ? `<span class="ex-idpill">ID</span>` : `<i class="sym s${f.cat}" style="margin:0 9px 0 9px"></i>`}<span>${f.label}</span></li>`).join("")
+      + (ptsFile(layers().length + kmFiles(layers().length).length) ? `<li><i class="sym s5" style="margin:0 9px 0 9px"></i><span>${S().ex_lab_pts}</span></li>` : "");
     for (const inp of box.querySelectorAll("input[type=color]")) inp.addEventListener("input", (e) => { ui.colours[e.target.dataset.key] = e.target.value; });
   }
 
@@ -156,6 +170,11 @@ export function initExportUI(app) {
       $("ex-kmpolys").addEventListener("change", (e) => { ui.kmPolys = e.target.checked; });
       $("ex-kmids").addEventListener("change", (e) => { ui.kmIds = e.target.checked; renderLayers(); });
       $("ex-kmsize").addEventListener("input", (e) => { ui.kmSize = Number(e.target.value); $("ex-kmsize-o").textContent = `${ui.kmSize} px`; });
+    }
+    if (app.getPoints()?.count) {
+      $("ex-pts").addEventListener("change", (e) => { ui.pts = e.target.checked; renderLayers(); });
+      $("ex-ptslabels").addEventListener("change", (e) => { ui.ptsLabels = e.target.checked; });
+      $("ex-ptssize").addEventListener("input", (e) => { ui.ptsSize = Number(e.target.value); $("ex-ptssize-o").textContent = `${ui.ptsSize} px`; });
     }
     $("ex-fill").addEventListener("input", (e) => { ui.fill = Number(e.target.value); $("ex-fill-o").textContent = `${Math.round(ui.fill * 100)} %`; });
     $("ex-outline").addEventListener("input", (e) => { ui.outline = Number(e.target.value); $("ex-outline-o").textContent = `${ui.outline} px`; });
@@ -244,8 +263,8 @@ export function initExportUI(app) {
     const L = S();
     const prog = $("ex-progress");
     const lys = layers();
-    const kmf = kmFiles(lys.length);
-    if (!lys.length && !kmf.length) { prog.textContent = L.ex_nolayers; return; }
+    const kmf = kmFiles(lys.length), ptsf = ptsFile(lys.length + kmf.length);
+    if (!lys.length && !kmf.length && !ptsf) { prog.textContent = L.ex_nolayers; return; }
     busy = true; $("ex-run").disabled = true;
     // the live camera decides the mode (it can be switched outside the panel)
     const mode = app.isMapView() ? "map" : "persp";
@@ -262,6 +281,7 @@ export function initExportUI(app) {
         exag: mode === "map" ? 1 : state().exag, baseState: { ...state() }, lang: state().lang,
         baseTextures: app.baseTex, viewCode: viewCode(), L,
         km: kmf.length ? { heritage: app.getHeritage(), files: kmf, size: ui.kmSize, polys: ui.kmPolys, ids: app.state.kmIds } : null,
+        pts: ptsf ? { points: app.getPoints(), file: ptsf.file, label: ptsf.label, size: ui.ptsSize, labels: ui.ptsLabels } : null,
       }, (msg) => { $("ex-progress").textContent = msg; });
       const a = document.createElement("a");
       const day = new Date().toISOString().slice(0, 10);
@@ -288,6 +308,7 @@ export function initExportUI(app) {
     // an Askeladden ID selection ignores the category switches, so every category starts on in the export too
     ui.km = app.state.km; ui.kmCats = app.getHeritage()?.filter ? KM_CATS.map(() => true) : [...app.state.kmCats];
     ui.kmIds = app.state.kmIdLabels;
+    ui.pts = app.state.pts && app.getPoints().count > 0; ui.ptsLabels = app.state.ptsLabels;
     render();
     panel.classList.remove("hidden"); frame.classList.remove("hidden");
     document.getElementById("app").classList.add("exporting");

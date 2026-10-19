@@ -9,10 +9,12 @@ import { Isochrones } from "./isochrones.js";
 import { STRINGS, applyI18n } from "./i18n.js";
 import { aboutHtml } from "./about.js";
 import { initExportUI } from "./exportui.js";
-import { Heritage, KM_CATS, KM_POLY_DIST } from "./heritage.js";
+import { Heritage, KM_CATS, KM_COLOURS, KM_POLY_DIST } from "./heritage.js";
 import { LakePicker } from "./picker.js";
 import { parseIds, matchSites } from "./askeladden.js";
 import { KmLabels } from "./kmlabels.js";
+import { CustomPoints, PT_COLOUR } from "./custompoints.js";
+import { parsePoints, fromUtm33, CRS_LIST, MAX_POINTS } from "./geo.js";
 import { initGuide } from "./guide.js";
 
 const $ = (id) => document.getElementById(id);
@@ -24,6 +26,7 @@ const DATA = `data/${LAKE}`;
 const state = {
   t: T_NOW, exag: 3, frame: 0, overlay: 0, iso: true, labels: true, regulated: false, recon: true, border: true,
   km: false, kmCats: [true, true, true, true, false], kmIds: "", kmIdLabels: false,
+  pts: false, ptsText: "", ptsCrs: "25833", ptsLabels: true,
   lang: (() => { const q = params.get("lang"); if (q === "no" || q === "en") return q; try { return localStorage.getItem("altevatn.lang") === "no" ? "no" : "en"; } catch { return "en"; } })(),
   basemap: "relief", playing: false, speed: 500,
 };
@@ -273,14 +276,15 @@ const pin = new THREE.Mesh(new THREE.CylinderGeometry(60, 60, 1, 12), new THREE.
 pin.rotation.x = Math.PI / 2; pin.visible = false; scene3.add(pin);
 
 // ---------------------------------------------------------------- cultural heritage sites
-let heritage = null, kmLabels = null;
+let heritage = null;
+const kmLabels = new KmLabels($("km-ids"));
 const KM_MARKER_PX = 10;        // marker diameter in CSS px
+const PT_MARKER_PX = 13;        // own points
 fetch(`${DATA}/kulturminner.json`).then((r) => (r.ok ? r.json() : null)).then((d) => {
   if (!d?.sites?.length) return;
   heritage = new Heritage(lake, model, d);
   heritage.setCategories(state.kmCats);
   heritage.setSize(KM_MARKER_PX * renderer.getPixelRatio());
-  kmLabels = new KmLabels($("km-ids"));
   // the example in the ID field: two IDs that exist in this scene
   const ids = d.sites.map((s) => s.id);
   kmIdIn.placeholder = [...new Set([ids[0], ids[Math.floor(ids.length / 2)]])].join(", ");
@@ -347,8 +351,53 @@ kmIdIn.addEventListener("keydown", (e) => {
 });
 kmIdClear.addEventListener("click", () => { kmIdIn.value = ""; applyKmIds(); kmIdIn.focus(); });
 $("km-ids-zoom").addEventListener("click", () => { applyKmIds(); zoomToKmSelection(); });
-$("c-kmids").addEventListener("change", (e) => { state.kmIdLabels = e.target.checked; kmLabels?.clear(); dirty = true; });
+$("c-kmids").addEventListener("change", (e) => { state.kmIdLabels = e.target.checked; kmLabels.clear(); dirty = true; });
 renderKmIdStatus();
+
+// Own points: locations typed in as coordinates, e.g. sites with restricted access ("begrenset offentlighet") that
+// the open API does not deliver. They are parsed here in the browser and never sent anywhere.
+const customPts = new CustomPoints(lake, model);
+customPts.setSize(PT_MARKER_PX * renderer.getPixelRatio());
+scene3.add(customPts.points);
+const ptsIn = $("pts-in"), ptsCrs = $("pts-crs"), ptsStatus = $("pts-status"), ptsClear = $("pts-clear"), ptsZoom = $("pts-zoom");
+let ptsResult = null, ptsTimer = 0;
+for (const c of CRS_LIST) ptsCrs.add(new Option(c.label, c.id));
+const lineList = (a) => a.slice(0, 5).map((e) => e.line).join(", ") + (a.length > 5 ? ` (+${a.length - 5})` : "");
+function renderPts() {
+  const L = S(), r = ptsResult, parts = [];
+  let warn = false;
+  ptsCrs.options[CRS_LIST.findIndex((c) => c.zone === 0)].text = L.pts_crs_latlon;
+  {   // the example in the text box: two points near the centre of the scene, written in the chosen coordinate system
+    const g = meta.grid, cx = g.x0 + g.nx * g.cell / 2, cy = g.y1 - g.ny * g.cell / 2;
+    ptsIn.placeholder = L.pts_ph(fromUtm33(cx, cy, ptsCrs.value), fromUtm33(cx + 150, cy - 80, ptsCrs.value));
+  }
+  if (r) {
+    if (r.shown) parts.push(L.pts_shown(r.shown));
+    if (r.outside.length) { parts.push(L.pts_outside(r.outside.length, lineList(r.outside))); warn = true; }
+    if (r.errors.length) { parts.push(L.pts_errors(r.errors.length, lineList(r.errors))); warn = true; }
+    if (r.truncated) { parts.push(L.pts_truncated(MAX_POINTS)); warn = true; }
+  }
+  ptsStatus.textContent = parts.join(" ");
+  ptsStatus.classList.toggle("warn", warn);
+}
+function applyPts() {
+  clearTimeout(ptsTimer);
+  state.ptsText = ptsIn.value; state.ptsCrs = ptsCrs.value;
+  const parsed = parsePoints(ptsIn.value, ptsCrs.value);
+  customPts.set(parsed.points);
+  ptsResult = ptsIn.value.trim() ? { shown: customPts.count, outside: customPts.outside, errors: parsed.errors, truncated: parsed.truncated } : null;
+  ptsClear.disabled = !ptsIn.value.trim();
+  ptsZoom.disabled = !customPts.count;
+  renderPts();
+  dirty = true;
+}
+ptsIn.addEventListener("input", () => { ptsClear.disabled = !ptsIn.value.trim(); clearTimeout(ptsTimer); ptsTimer = setTimeout(applyPts, 250); });
+ptsCrs.addEventListener("change", applyPts);
+ptsClear.addEventListener("click", () => { ptsIn.value = ""; applyPts(); ptsIn.focus(); });
+ptsZoom.addEventListener("click", () => { applyPts(); zoomToSites(customPts.items); });
+$("c-pts").addEventListener("change", (e) => { state.pts = e.target.checked; $("pts-box").classList.toggle("hidden", !state.pts); kmLabels.clear(); dirty = true; });
+$("c-ptslabels").addEventListener("change", (e) => { state.ptsLabels = e.target.checked; kmLabels.clear(); dirty = true; });
+renderPts();
 
 /** Fly to the sites selected by ID (the camera keeps its direction; in the map view it only pans and zooms). */
 function zoomToKmSelection() {
@@ -393,20 +442,31 @@ const kmTip = $("km-tip"), kmPop = $("km-pop");
 let kmHover = null, kmOpen = null, downXY = null;
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const kmTitle = (s) => esc(s.name || s.art || S()[`km_${s.cat}`] || s.cat);
+let ptHover = null;
 renderer.domElement.addEventListener("pointermove", (e) => {
-  if (!heritage || !state.km || exporting) { if (kmHover) { kmHover = null; kmTip.classList.add("hidden"); } return; }
-  const hit = heritage.pick(e.offsetX, e.offsetY, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state);
+  const heritageOn = heritage && state.km, ptsOn = state.pts && customPts.count;
+  if (exporting || !(heritageOn || ptsOn)) { if (kmHover || ptHover) { kmHover = ptHover = null; kmTip.classList.add("hidden"); } return; }
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+  const hit = heritageOn ? heritage.pick(e.offsetX, e.offsetY, camera, w, h, state) : null;
   kmHover = hit?.site ?? null;
+  ptHover = !kmHover && ptsOn ? customPts.pick(e.offsetX, e.offsetY, camera, w, h, state)?.point ?? null : null;
   renderer.domElement.style.cursor = kmHover ? "pointer" : "";
-  if (!kmHover || kmHover === kmOpen || e.buttons) { kmTip.classList.add("hidden"); return; }
+  if (!(kmHover || ptHover) || (kmHover && kmHover === kmOpen) || e.buttons) { kmTip.classList.add("hidden"); return; }
+  clearTimeout(ptTipTimer);
   const s = kmHover;
-  kmTip.innerHTML = `<h4><i class="sym s${s.c}"></i>${kmTitle(s)}</h4><p class="id">ID ${esc(s.id)}</p>`
-    + (s.dating.length ? `<p>${esc(s.dating.join(", "))}</p>` : "");
+  kmTip.innerHTML = s
+    ? `<h4><i class="sym s${s.c}"></i>${kmTitle(s)}</h4><p class="id">ID ${esc(s.id)}</p>` + (s.dating.length ? `<p>${esc(s.dating.join(", "))}</p>` : "")
+    : ptTipHtml(ptHover);
+  positionKmTip(e.clientX, e.clientY);
+});
+const ptTipHtml = (p) => `<h4><i class="sym s5"></i>${esc(p.label || S().pts_unnamed)}</h4><p class="id">${Math.round(p.x)} ${Math.round(p.y)} (EPSG:25833)</p>`;
+function positionKmTip(x, y) {
   kmTip.classList.remove("hidden");
   const tw = kmTip.offsetWidth, th = kmTip.offsetHeight;
-  kmTip.style.left = `${Math.min(window.innerWidth - tw - 8, e.clientX + 14)}px`;
-  kmTip.style.top = `${Math.min(window.innerHeight - th - 8, e.clientY + 14)}px`;
-});
+  kmTip.style.left = `${Math.min(window.innerWidth - tw - 8, x + 14)}px`;
+  kmTip.style.top = `${Math.min(window.innerHeight - th - 8, y + 14)}px`;
+}
+let ptTipTimer = 0;
 renderer.domElement.addEventListener("pointerleave", () => { kmTip.classList.add("hidden"); });
 renderer.domElement.addEventListener("pointerdown", (e) => { downXY = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener("pointerup", (e) => {
@@ -416,6 +476,16 @@ renderer.domElement.addEventListener("pointerup", (e) => {
     ? heritage.pick(e.offsetX, e.offsetY, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state, e.pointerType === "touch" ? 18 : 10)
     : null;
   if (hit) openKmPopup(hit.site); else closeKmPopup();
+  // a tap (or click) on an own point shows its label and coordinates for a few seconds (touch screens have no hover)
+  if (!hit && state.pts && customPts.count && !exporting) {
+    const p = customPts.pick(e.offsetX, e.offsetY, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state, e.pointerType === "touch" ? 18 : 10);
+    if (p) {
+      kmTip.innerHTML = ptTipHtml(p.point);
+      positionKmTip(e.clientX, e.clientY);
+      clearTimeout(ptTipTimer);
+      ptTipTimer = setTimeout(() => kmTip.classList.add("hidden"), 4000);
+    }
+  }
 });
 function kmPopupHtml(s) {
   const L = S();
@@ -568,7 +638,7 @@ function setLang(lang) {
   state.lang = lang;
   try { localStorage.setItem("altevatn.lang", lang); } catch { /* private mode */ }
   for (const x of document.querySelectorAll(".lang button")) x.classList.toggle("on", x.dataset.lang === lang);
-  applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso(); picker.relabel(); renderKmIdStatus();
+  applyI18n(lang); syncModelUi(); buildTimeline(); updateAttribution(); updateIso(); picker.relabel(); renderKmIdStatus(); renderPts();
   for (const o of labels) o.element.innerHTML = labelHtml(o.userData.p);
   if (tour.active) showStep(tour.i, false);
   exportUI?.rerender();
@@ -1012,8 +1082,17 @@ function frame(now) {
     heritage.setVisible(state.km, d < KM_POLY_DIST);
     heritage.setScale(2 * d * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2)) / renderer.domElement.clientHeight);
     placeKmPopup();
-    if (state.km && state.kmIdLabels) kmLabels?.update(heritage, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state, KM_MARKER_PX);
-    else kmLabels?.clear();
+  }
+  customPts.points.visible = state.pts && customPts.count > 0;
+  {
+    // A layer whose markers are drawn takes part even when its labels are off (empty text): its markers keep their space.
+    const layers = [], heritageOn = heritage && state.km, ptsOn = state.pts && customPts.count > 0;
+    if ((heritageOn && state.kmIdLabels) || (ptsOn && state.ptsLabels)) {
+      if (heritageOn) layers.push({ version: heritage.version, markerPx: KM_MARKER_PX, anchors: (...a) => heritage.anchors(...a), text: (s) => (state.kmIdLabels ? s.id : ""), colour: (s) => KM_COLOURS[s.c] });
+      if (ptsOn) layers.push({ version: customPts.version, markerPx: PT_MARKER_PX, boost: 10, anchors: (...a) => customPts.anchors(...a), text: (s) => (state.ptsLabels ? s.label : ""), colour: () => PT_COLOUR });
+    }
+    if (layers.length) kmLabels.update(layers, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, state, model.F(state.t));
+    else kmLabels.clear();
   }
   lake.waterMat.uniforms.uCamPos.value.copy(camera.position);
   lake.waterMat.uniforms.uTime.value = now / 1000;
@@ -1048,12 +1127,13 @@ exportUI = initExportUI({
   hideExtras: (on) => {
     if (on) { closeKmPopup(); kmTip.classList.add("hidden"); }
     $("km-ids").style.display = on ? "none" : "";
-    for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin, heritage?.points, heritage?.polygons].filter(Boolean)) {
+    for (const m of [iso.mesh, shoreNow.mesh, borderLines.mesh, profileTrack.mesh, pin, heritage?.points, heritage?.polygons, customPts.points].filter(Boolean)) {
       if (on) { m.userData.wasVisible = m.visible; m.visible = false; } else if (m.userData.wasVisible !== undefined) m.visible = m.userData.wasVisible;
     }
   },
   markDirty: () => { dirty = true; },
   getHeritage: () => heritage,
+  getPoints: () => customPts,
   onOpen: () => { guide?.closeHelp(false); guide?.close(); if (tour.active) endTour(); stopPlay(); leaveRegulated(); setFrame(0); },
 });
 guide = initGuide({ $, S, startTour, resetView });

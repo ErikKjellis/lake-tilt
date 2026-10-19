@@ -2,7 +2,6 @@
 // The labels are laid out without overlap (askeladden.js: placeLabels) and only when something changed
 // (camera, time, exaggeration, what is shown), so an idle view costs nothing.
 import { placeLabels } from "./askeladden.js";
-import { KM_COLOURS } from "./heritage.js";
 
 export const KM_LABEL = { size: 11.5, h: 16, pad: 9, max: 400 };   // px; pad = bar (3) + padding (3 + 3)
 
@@ -45,27 +44,32 @@ export class KmLabels {
   }
 
   /**
-   * @param {import("./heritage.js").Heritage} heritage
+   * @param {{version: number, markerPx: number, boost?: number, anchors: Function, text: (item) => string, colour: (item) => string}[]} layers
+   *   the layers to label. version: counts changes of what the layer shows; markerPx: marker diameter in CSS px;
+   *   boost: priority bonus when space is short; anchors(camera, w, h, state, opt) -> [{site, sx, sy, z}];
+   *   text/colour: the label text (empty: no label, the marker only keeps its space) and the colour bar of an item
    * @param {THREE.Camera} camera
    * @param {number} w  view size in CSS px
    * @param {number} h
    * @param {{t: number, frame: number, exag: number}} state
-   * @param {number} markerPx marker diameter in CSS px
+   * @param {number} F cumulative uplift of the current time (model.F(state.t)): the tilted frame moves the markers with it
    */
-  update(heritage, camera, w, h, state, markerPx) {
+  update(layers, camera, w, h, state, F) {
     camera.updateMatrixWorld();
-    const sig = [...camera.matrixWorldInverse.elements, ...camera.projectionMatrix.elements, w, h, state.t, state.frame, state.exag, markerPx, heritage.version, heritage.model.F(state.t)];   // F: the tilted frame moves the markers with tau, k ...
+    const sig = [...camera.matrixWorldInverse.elements, ...camera.projectionMatrix.elements, w, h, state.t, state.frame, state.exag, F, layers.length];
+    for (const L of layers) sig.push(L.version, L.markerPx);
     if (this.sig && this.sig.length === sig.length && this.sig.every((v, i) => v === sig[i])) return;
     this.sig = sig;
-    const anchors = heritage.anchors(camera, w, h, state, { radiusPx: markerPx * 0.4 });
-    const items = anchors.map((a) => ({ x: a.sx, y: a.sy, w: this.width(a.site.id), h: KM_LABEL.h, r: markerPx / 2 + 1, prio: -a.z }));
+    const found = [];
+    for (const L of layers) for (const a of L.anchors(camera, w, h, state, { radiusPx: L.markerPx * 0.4 })) found.push({ a, L, text: L.text(a.site) });
+    const items = found.map(({ a, L, text }) => ({ x: a.sx, y: a.sy, w: text ? this.width(text) : 0, h: KM_LABEL.h, r: L.markerPx / 2 + 1, prio: -a.z + (L.boost ?? 0) }));
     const pos = placeLabels(items, w, h, { max: KM_LABEL.max });
     let n = 0;
-    anchors.forEach((a, i) => {
+    found.forEach(({ L, a, text }, i) => {
       if (!pos[i]) return;
-      const node = this._node(n++), id = a.site.id;
-      if (node._id !== id) { node.textContent = id; node._id = id; }
-      if (node._c !== a.site.c) { node.style.borderLeftColor = KM_COLOURS[a.site.c]; node._c = a.site.c; }
+      const node = this._node(n++), colour = L.colour(a.site);
+      if (node._t !== text) { node.textContent = text; node._t = text; }
+      if (node._c !== colour) { node.style.borderLeftColor = colour; node._c = colour; }
       node.style.transform = `translate(${pos[i].x.toFixed(1)}px, ${pos[i].y.toFixed(1)}px)`;
       node.style.width = `${items[i].w}px`;
       node.style.display = "";

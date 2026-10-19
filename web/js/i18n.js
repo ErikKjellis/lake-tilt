@@ -93,6 +93,24 @@ export const STRINGS = {
     km_modern: "Modern (after 1537)",
     km_other: "Other / undated",
     km_polys: "Zoom in to see the site outlines (solid) and safety zones (dashed).",
+    c_pts: "Own points (x, y)",
+    pts_hint: "For sites that the open data does not include, for example because access is restricted. One point per line: x y and an optional label. The points are never sent anywhere; only a poster export with the aerial photo as background requests that picture for the framed area online.",
+    pts_aria: "Own points, one per line: x y and an optional label",
+    pts_crs: "Coordinate system",
+    pts_crs_latlon: "WGS84 / ETRS89 lat, lon (°)",
+    pts_ph: (p, q) => `${p[0]} ${p[1]} Label\n${q[0]} ${q[1]} Another site`,
+    pts_zoom: "Zoom to the points",
+    pts_clear: "Remove all points",
+    pts_labels: "Show the labels on the map",
+    pts_shown: (n) => `${n} ${n === 1 ? "point" : "points"} shown.`,
+    pts_outside: (n, lines) => `${n === 1 ? "Line" : "Lines"} ${lines} ${n === 1 ? "is" : "are"} outside this scene and not shown.`,
+    pts_errors: (n, lines) => `Not understood: ${n === 1 ? "line" : "lines"} ${lines}. Write x and y, then the label.`,
+    pts_truncated: (max) => `Only the first ${max} points are used.`,
+    pts_unnamed: "Own point",
+    ex_pts: "Own points",
+    ex_pts_layer: (n) => `Own points (${n}) as a layer`,
+    ex_pts_labels: "Labels on the layer",
+    ex_lab_pts: "Own points (typed in)",
     km_ids_label: "Askeladden ID (separate with commas)",
     km_ids_hint: "Type IDs to show only those sites. A number without a dash shows all parts of that site.",
     km_ids_zoom: "Zoom to the selection",
@@ -201,7 +219,7 @@ export const STRINGS = {
       ["Change the view", "<p><b>3D / Map</b> at the top of the View panel switches between the 3D landscape and a flat map seen from straight above, with north up. In the map you drag to move it and scroll to zoom.</p><p><b>⌂ Reset view</b> takes you back to the starting view if you get lost. Keys: <kbd>M</kbd> map / 3D, <kbd>R</kbd> reset.</p><p><b>Guided tour</b> flies to selected viewpoints and tells the lake’s story in 8 steps.</p>"],
       ["Travel through time", "<p>Drag the <b>time slider</b> at the bottom to pick a time between when the ice melted and the year 3000. The large year shows where you are.</p><p><b>▶</b> plays the history at the chosen speed: from a past time up to today, and from today on into the future.</p><p>The small marks above the slider are events, such as changes in where the lake drained and the dam. Hover over one to read it; click it to jump there.</p><p>Keys: <kbd>←</kbd> <kbd>→</kbd> 100 years (with <kbd>Shift</kbd> 1000), <kbd>Space</kbd> play / pause.</p>"],
       ["Choose what you see", "<p><b>Land fixed · water tilts</b> or <b>Water flat · land tilts</b>: two ways of showing the same tilt. Go back in time first: today the tilt is zero, so the two look the same.</p><p><b>Vertical exaggeration</b> stretches the heights (3× at start). <b>Map</b> changes the background: natural relief, Kartverket maps or today’s aerial photo. <b>Overlay</b> colours the land by how much it has risen since the chosen time, or by how fast it is rising today.</p><p>The check boxes turn layers on and off: old shorelines, place names, today’s reservoir, the border and cultural heritage sites. On a phone, tap <b>+</b> on the “At this time” panel to show these controls.</p>"],
-      ["Explore further", "<p><b>Cultural heritage sites:</b> tick the box, then click a symbol for details and a link to Kulturminnesøk. To look at particular sites, type their <b>Askeladden IDs</b> (separated by commas) in the box below the categories; tick <b>Show the IDs on the map</b> to write the numbers next to the symbols.</p><p><b>Long profile</b> (bottom left, on larger screens): move the mouse along it to see the spot on the map.</p><p><b>Save image</b> saves the 3D view as a PNG. <b>Poster export</b> makes print-ready layers for a framed view.</p><p>Press the <b>?</b> button (next to EN / NO) or the <kbd>?</kbd> key at any time for help, keyboard shortcuts and this guide.</p>"],
+      ["Explore further", "<p><b>Cultural heritage sites:</b> tick the box, then click a symbol for details and a link to Kulturminnesøk. To look at particular sites, type their <b>Askeladden IDs</b> (separated by commas) in the box below the categories; tick <b>Show the IDs on the map</b> to write the numbers next to the symbols. Sites that the open data lacks (restricted access) can be added as <b>Own points</b> with their coordinates.</p><p><b>Long profile</b> (bottom left, on larger screens): move the mouse along it to see the spot on the map.</p><p><b>Save image</b> saves the 3D view as a PNG. <b>Poster export</b> makes print-ready layers for a framed view.</p><p>Press the <b>?</b> button (next to EN / NO) or the <kbd>?</kbd> key at any time for help, keyboard shortcuts and this guide.</p>"],
     ],
     help_move: "Move around",
     help_mouse: "Mouse",
@@ -231,7 +249,7 @@ export const STRINGS = {
     ],
     help_tips: "Tips",
     help_tip_list: [
-      "Cultural heritage sites: click a symbol for details. Outlines and safety zones appear when you zoom in closer than about 8 km. Type Askeladden IDs, separated by commas, to show only those sites.",
+      "Cultural heritage sites: click a symbol for details. Outlines and safety zones appear when you zoom in closer than about 8 km. Type Askeladden IDs, separated by commas, to show only those sites. Own points: add sites that the open data lacks by their coordinates.",
       "A key does nothing? Click the map first, so that no text box or drop-down menu has the focus.",
       "On a phone, tap <b>+</b> on the “At this time” panel to show the controls.",
     ],
@@ -340,6 +358,24 @@ export const STRINGS = {
     km_modern: "Nyere tid (etter 1537)",
     km_other: "Annet / udatert",
     km_polys: "Zoom inn for å se lokalitetsavgrensning (heltrukket) og sikringssone (stiplet).",
+    c_pts: "Egne punkter (x, y)",
+    pts_hint: "For steder som ikke finnes i åpne data, for eksempel fordi tilgangen er begrenset. Ett punkt per linje: x y og eventuelt en merkelapp. Punktene sendes aldri noe sted; bare plakateksport med flyfoto som bakgrunn henter dette bildet over nett for det innrammede området.",
+    pts_aria: "Egne punkter, ett per linje: x y og eventuelt en merkelapp",
+    pts_crs: "Koordinatsystem",
+    pts_crs_latlon: "WGS84 / ETRS89 bredde, lengde (°)",
+    pts_ph: (p, q) => `${p[0]} ${p[1]} Merkelapp\n${q[0]} ${q[1]} Et annet sted`,
+    pts_zoom: "Zoom til punktene",
+    pts_clear: "Fjern alle punkter",
+    pts_labels: "Vis merkelappene på kartet",
+    pts_shown: (n) => `${n} ${n === 1 ? "punkt" : "punkter"} vises.`,
+    pts_outside: (n, lines) => `${n === 1 ? "Linje" : "Linjene"} ${lines} ligger utenfor denne scenen og vises ikke.`,
+    pts_errors: (n, lines) => `Ikke forstått: ${n === 1 ? "linje" : "linjene"} ${lines}. Skriv x og y, deretter merkelappen.`,
+    pts_truncated: (max) => `Bare de første ${max} punktene brukes.`,
+    pts_unnamed: "Eget punkt",
+    ex_pts: "Egne punkter",
+    ex_pts_layer: (n) => `Egne punkter (${n}) som eget lag`,
+    ex_pts_labels: "Merkelapper på laget",
+    ex_lab_pts: "Egne punkter (skrevet inn)",
     km_ids_label: "Askeladden-ID (skill med komma)",
     km_ids_hint: "Skriv inn ID-er for å vise bare disse. Et tall uten bindestrek viser alle delene av lokaliteten.",
     km_ids_zoom: "Zoom til utvalget",
@@ -448,7 +484,7 @@ export const STRINGS = {
       ["Bytt visning", "<p><b>3D / Kart</b> øverst i Visning-panelet bytter mellom 3D-landskapet og et flatt kart sett rett ovenfra, med nord opp. I kartet drar du for å flytte det og ruller for å zoome.</p><p><b>⌂ Tilbakestill visningen</b> tar deg tilbake til startbildet hvis du går deg vill. Taster: <kbd>M</kbd> kart / 3D, <kbd>R</kbd> tilbakestill.</p><p><b>Omvisning</b> flyr til utvalgte utsiktspunkter og forteller historien om vatnet i 8 steg.</p>"],
       ["Reis i tid", "<p>Dra <b>tidslinjen</b> nederst for å velge et tidspunkt mellom da isen smeltet og år 3000. Det store årstallet viser hvor du er.</p><p><b>▶</b> spiller av historien i valgt fart: fra et tidspunkt i fortiden fram til i dag, og fra i dag videre inn i framtiden.</p><p>De små strekene over tidslinjen er hendelser, for eksempel da vatnet skiftet avløp, og da demningen ble bygd i 1960. Hold pekeren over en for å lese den, og klikk for å hoppe dit.</p><p>Taster: <kbd>←</kbd> <kbd>→</kbd> 100 år (med <kbd>Shift</kbd> 1000), <kbd>Mellomrom</kbd> spill av / pause.</p>"],
       ["Velg hva du ser", "<p><b>Landet fast · vannflaten tipper</b> eller <b>Vannflaten vannrett · landet tipper</b>: to måter å vise den samme tippingen på. Gå tilbake i tid først: i dag er tippingen null, så de to ser like ut.</p><p><b>Overhøyning</b> strekker høydene (3× ved start). <b>Kart</b> bytter bakgrunn: naturlig terreng, Kartverkets kart eller dagens flyfoto. <b>Tema</b> farger landet etter hvor mye det har hevet seg siden det valgte tidspunktet, eller etter hvor raskt det hever seg i dag.</p><p>Avkrysningsboksene slår lag av og på: gamle strandlinjer, stedsnavn, dagens magasin, riksgrensen og kulturminner. På mobil trykker du <b>+</b> på panelet «På dette tidspunktet» for å vise disse valgene.</p>"],
-      ["Utforsk videre", "<p><b>Kulturminner:</b> kryss av i boksen, og klikk på et symbol for detaljer og lenke til Kulturminnesøk. Vil du se bestemte kulturminner, skriver du <b>Askeladden-ID-ene</b> deres (skilt med komma) i feltet under kategoriene; kryss av for <b>Vis ID-ene på kartet</b> for å skrive numrene ved symbolene.</p><p><b>Lengdeprofilen</b> (nederst til venstre, på større skjermer): før musepekeren langs den for å se stedet i kartet.</p><p><b>Lagre bilde</b> lagrer 3D-visningen som PNG. <b>Plakateksport</b> lager trykkeklare lag for et valgt utsnitt.</p><p>Trykk på <b>?</b>-knappen (ved EN / NO) eller <kbd>?</kbd>-tasten når som helst for hjelp, hurtigtaster og denne veiledningen.</p>"],
+      ["Utforsk videre", "<p><b>Kulturminner:</b> kryss av i boksen, og klikk på et symbol for detaljer og lenke til Kulturminnesøk. Vil du se bestemte kulturminner, skriver du <b>Askeladden-ID-ene</b> deres (skilt med komma) i feltet under kategoriene; kryss av for <b>Vis ID-ene på kartet</b> for å skrive numrene ved symbolene. Steder som mangler i åpne data (begrenset tilgang) kan legges til som <b>Egne punkter</b> med koordinater.</p><p><b>Lengdeprofilen</b> (nederst til venstre, på større skjermer): før musepekeren langs den for å se stedet i kartet.</p><p><b>Lagre bilde</b> lagrer 3D-visningen som PNG. <b>Plakateksport</b> lager trykkeklare lag for et valgt utsnitt.</p><p>Trykk på <b>?</b>-knappen (ved EN / NO) eller <kbd>?</kbd>-tasten når som helst for hjelp, hurtigtaster og denne veiledningen.</p>"],
     ],
     help_move: "Bevege seg rundt",
     help_mouse: "Mus",
@@ -478,7 +514,7 @@ export const STRINGS = {
     ],
     help_tips: "Tips",
     help_tip_list: [
-      "Kulturminner: klikk på et symbol for detaljer. Avgrensning og sikringssone vises når du zoomer nærmere enn omtrent 8 km. Skriv Askeladden-ID-er, skilt med komma, for å vise bare disse.",
+      "Kulturminner: klikk på et symbol for detaljer. Avgrensning og sikringssone vises når du zoomer nærmere enn omtrent 8 km. Skriv Askeladden-ID-er, skilt med komma, for å vise bare disse. Egne punkter: legg til steder som mangler i åpne data, med koordinater.",
       "Skjer det ingenting når du trykker på en tast? Klikk i kartet først, så ikke et tekstfelt eller en nedtrekksmeny har fokus.",
       "På mobil trykker du <b>+</b> på panelet «På dette tidspunktet» for å vise valgene.",
     ],
@@ -506,6 +542,10 @@ export function applyI18n(lang) {
   document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
     const v = S[el.dataset.i18nPh];
     if (typeof v === "string") el.placeholder = v;
+  });
+  document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    const v = S[el.dataset.i18nAria];
+    if (typeof v === "string") el.setAttribute("aria-label", v);
   });
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
     const v = S[el.dataset.i18nTitle];
